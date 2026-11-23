@@ -14,7 +14,7 @@ import { ScheduleForm } from "./schedule-form";
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: TIME_ZONE });
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
 
-export function ScheduleManager({ programId }: { programId: string }) {
+export function ScheduleManager() {
   const { state, users, ops } = useStore();
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -23,7 +23,7 @@ export function ScheduleManager({ programId }: { programId: string }) {
   const [notice, setNotice] = React.useState<string | null>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
 
-  const sessions = state.order.map((id) => state.bundles[id]).filter((b) => b && b.project.program_id === programId);
+  const sessions = state.order.map((id) => state.bundles[id]).filter(Boolean);
   const byDay = new Map<string, SessionBundle[]>();
   sessions.forEach((b) => byDay.set(dayKey(b.session.scheduled_at), [...(byDay.get(dayKey(b.session.scheduled_at)) ?? []), b]));
   const locked = sessions.filter((b) => b.session.is_locked);
@@ -173,7 +173,7 @@ export function ScheduleManager({ programId }: { programId: string }) {
                   Scoring has started. You can reschedule or add panelists, but the stage and the seats of panelists who already scored are locked.
                 </p>
               )}
-              <ScheduleForm key={mode.kind === "edit" ? mode.id : "new"} state={state} users={users} editing={editing} busy={busy} programId={programId}
+              <ScheduleForm key={mode.kind === "edit" ? mode.id : "new"} state={state} users={users} editing={editing} busy={busy}
                 onSubmit={submit} onCancel={() => setMode({ kind: "closed" })} />
             </CardContent>
           </Card>

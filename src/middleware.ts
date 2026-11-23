@@ -6,10 +6,10 @@ import { createServerClient } from "@supabase/ssr";
  * the in-app role switcher simulates identities.
  */
 const ROLE_ROUTES: { prefix: string; roles: string[] }[] = [
-  { prefix: "/admin", roles: ["superadmin", "admin"] },
-  { prefix: "/defense", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"] },
-  { prefix: "/account", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"] },
-  { prefix: "/print", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser"] },
+  { prefix: "/admin", roles: ["admin"] },
+  { prefix: "/defense", roles: ["admin", "chair", "panelist", "secretary", "adviser", "student"] },
+  { prefix: "/account", roles: ["admin", "chair", "panelist", "secretary", "adviser", "student"] },
+  { prefix: "/print", roles: ["admin", "chair", "panelist", "secretary", "adviser"] },
 ];
 
 export async function middleware(req: NextRequest) {

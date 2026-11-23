@@ -99,7 +99,7 @@ export async function saveMinutes(sb: SupabaseClient, m: DefenseMinutes): Promis
 // Bulk loads for the signed-in user (RLS decides what comes back)
 // ---------------------------------------------------------------------------
 export async function listUsers(sb: SupabaseClient) {
-  const { data, error } = await sb.from("users").select("id, full_name, email, role, department, program_id").order("full_name");
+  const { data, error } = await sb.from("users").select("id, full_name, email, role, department").order("full_name");
   if (error) throw error;
   return data as import("../types").User[];
 }
@@ -224,40 +224,17 @@ export async function syncSessionRubric(sb: SupabaseClient, sessionId: string) {
   return data as number;
 }
 
-/** Grade split per course and stage. */
-export async function getStageBlends(sb: SupabaseClient): Promise<Record<string, Record<DefenseStage, StageBlend>>> {
+export async function getStageBlends(sb: SupabaseClient): Promise<Record<DefenseStage, StageBlend>> {
   const { data, error } = await sb.from("stage_grading_config").select("*");
   if (error) throw error;
-  const out: Record<string, Record<DefenseStage, StageBlend>> = {};
-  for (const r of data ?? []) {
-    (out[r.program_id] ??= {} as Record<DefenseStage, StageBlend>)[r.stage as DefenseStage] =
-      { groupWeight: Number(r.group_weight), individualWeight: Number(r.individual_weight) };
-  }
-  return out;
-}
-
-export async function listPrograms(sb: SupabaseClient) {
-  const { data, error } = await sb.from("programs").select("id, code, name, project_term").order("code");
-  if (error) throw error;
-  return data as import("../types").Program[];
-}
-
-export async function createProgram(sb: SupabaseClient, p: Pick<import("../types").Program, "code" | "name" | "project_term">) {
-  const { data, error } = await sb.rpc("create_program", { p_code: p.code, p_name: p.name, p_term: p.project_term });
-  if (error) throw error;
-  return data as import("../types").Program;
-}
-
-export async function updateProgram(sb: SupabaseClient, id: string, p: Pick<import("../types").Program, "code" | "name" | "project_term">) {
-  const { error } = await sb.from("programs").update({ code: p.code.trim().toUpperCase(), name: p.name.trim(), project_term: p.project_term }).eq("id", id);
-  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((r) => [r.stage, { groupWeight: Number(r.group_weight), individualWeight: Number(r.individual_weight) }])) as Record<DefenseStage, StageBlend>;
 }
 
 /** Update the stage template. Then call syncSessionRubric() for each unscored session of the stage. */
-export async function setStageBlend(sb: SupabaseClient, programId: string, stage: DefenseStage, blend: StageBlend) {
+export async function setStageBlend(sb: SupabaseClient, stage: DefenseStage, blend: StageBlend) {
   const { error } = await sb.from("stage_grading_config")
     .update({ group_weight: blend.groupWeight, individual_weight: blend.individualWeight, updated_at: new Date().toISOString() })
-    .eq("program_id", programId).eq("stage", stage);
+    .eq("stage", stage);
   if (error) throw error;
 }
 
@@ -275,7 +252,6 @@ export async function listAccounts(sb: SupabaseClient): Promise<AccountRow[]> {
 export async function createAccount(sb: SupabaseClient, input: import("../types").AccountInput) {
   const { data, error } = await sb.rpc("admin_create_account", {
     p_email: input.email, p_full_name: input.full_name, p_role: input.role, p_department: input.department,
-    p_program: input.role === "superadmin" ? null : input.program_id ?? null,
   });
   if (error) throw error;
   const row = (data as { user_id: string; temp_password: string }[])[0];

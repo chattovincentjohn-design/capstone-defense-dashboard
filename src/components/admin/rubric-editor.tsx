@@ -16,7 +16,7 @@ import { cn, round } from "@/lib/utils";
 
 const STAGES = Object.keys(STAGE_LABEL) as DefenseStage[];
 
-export function RubricEditor({ programId }: { programId: string }) {
+export function RubricEditor() {
   const { state } = useStore();
   const [stage, setStage] = React.useState<DefenseStage>("final");
   const [dirty, setDirty] = React.useState(false);
@@ -32,7 +32,7 @@ export function RubricEditor({ programId }: { programId: string }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Defense stage">
         {STAGES.map((s) => {
-          const problems = [...blendProblems(blendFor(state, programId, s)), ...rubricProblems(activeRubric(state.rubric, programId, s))];
+          const problems = [...blendProblems(blendFor(state, s)), ...rubricProblems(activeRubric(state.rubric, s))];
           return (
             <button key={s} role="tab" aria-selected={s === stage} onClick={() => switchStage(s)}
               className={cn("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors",
@@ -43,26 +43,26 @@ export function RubricEditor({ programId }: { programId: string }) {
           );
         })}
       </div>
-      <StageEditor key={`${programId}:${stage}`} programId={programId} stage={stage} onDirty={setDirty} />
+      <StageEditor key={stage} stage={stage} onDirty={setDirty} />
     </div>
   );
 }
 
-function StageEditor({ programId, stage, onDirty }: { programId: string; stage: DefenseStage; onDirty: (d: boolean) => void }) {
+function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boolean) => void }) {
   const { state, ops } = useStore();
   const [saving, setSaving] = React.useState(false);
   const resync = React.useRef(false);
-  const saved = React.useMemo(() => activeRubric(state.rubric, programId, stage), [state.rubric, programId, stage]);
+  const saved = React.useMemo(() => activeRubric(state.rubric, stage), [state.rubric, stage]);
   const [drafts, setDrafts] = React.useState<RubricCriterion[]>(saved);
   const [report, setReport] = React.useState<RubricSaveReport | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const bundles = Object.values(state.bundles).filter((b) => b.session.stage === stage && b.project.program_id === programId);
+  const bundles = Object.values(state.bundles).filter((b) => b.session.stage === stage);
   // Only scored/locked sessions pin a criterion; unscored ones are re-synced on save.
   const usage = (id: string) => bundles.filter((b) => !isRubricSyncable(b) && b.criteria.some((c) => c.id === id)).length;
   const syncable = bundles.filter(isRubricSyncable);
   const frozen = bundles.filter((b) => !isRubricSyncable(b));
-  const savedBlend = blendFor(state, programId, stage);
+  const savedBlend = blendFor(state, stage);
   const [blend, setBlend] = React.useState<StageBlend>(savedBlend);
   const blendDirty = blend.groupWeight !== savedBlend.groupWeight || blend.individualWeight !== savedBlend.individualWeight;
   const problems = [...blendProblems(blend), ...rubricProblems(drafts)];
@@ -94,7 +94,7 @@ function StageEditor({ programId, stage, onDirty }: { programId: string; stage: 
   const add = (scope: RubricScope) => {
     const n = scoped(scope).length;
     setDrafts((ds) => [...ds, {
-      id: `new-${Math.random().toString(36).slice(2, 8)}`, program_id: programId, stage, scope, criterion_name: "", description: "",
+      id: `new-${Math.random().toString(36).slice(2, 8)}`, stage, scope, criterion_name: "", description: "",
       weight_percentage: 0, max_score: 5, sort_order: n + 1, is_active: true,
     }]);
   };
@@ -123,7 +123,7 @@ function StageEditor({ programId, stage, onDirty }: { programId: string; stage: 
   const save = async () => {
     setSaving(true);
     try {
-      const r = await ops.saveRubric(programId, stage, drafts, blend);
+      const r = await ops.saveRubric(stage, drafts, blend);
       resync.current = true;
       setReport(r);
       setError(null);

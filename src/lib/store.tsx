@@ -8,35 +8,31 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, deleteScheduledSession, programProblem, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
+  accountChangeProblem, accountProblems, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
-import { PROGRAMS, seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
+import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  Account, AccountInput, DefenseMinutes, DefenseStage, MemberInput, Program, ProjectMember, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
+  Account, AccountInput, DefenseMinutes, DefenseStage, MemberInput, ProjectMember, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
 
-const STORAGE_KEY = "cdms-demo-state-v2"; // v2: courses (programs)
+const STORAGE_KEY = "cdms-demo-state-v1";
 
 export interface State {
   bundles: Record<string, SessionBundle>;
   /** Rubric templates edited by the Coordinator (sessions hold frozen snapshots). */
   rubric: RubricCriterion[];
-  /** Group/individual final-grade blend per course and stage (sessions hold frozen copies). */
-  grading: Record<string, Record<DefenseStage, StageBlend>>;
-  /** Courses (BSIT, BS Education, ...). */
-  programs: Program[];
+  /** Group/individual final-grade blend per stage (sessions hold frozen copies). */
+  grading: Record<DefenseStage, StageBlend>;
   order: string[];
   /** Demo only: the editable cast. Live mode loads accounts on demand from the database. */
   accounts: Account[];
   currentUserId: string;
   hydrated: boolean;
 }
-
-export type ProgramInput = Pick<Program, "code" | "name" | "project_term">;
 
 export type AccountPatch = Partial<Pick<Account, "full_name" | "role" | "department">>;
 
@@ -64,9 +60,7 @@ export interface StoreOps {
   schedule(draft: ScheduleDraft): Promise<string>;
   updateSchedule(draft: ScheduleDraft): Promise<string>;
   deleteSession(sessionId: string): Promise<string>;
-  saveRubric(programId: string, stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend): Promise<RubricSaveReport>;
-  createProgram(input: ProgramInput): Promise<Program>;
-  updateProgram(id: string, input: ProgramInput): Promise<void>;
+  saveRubric(stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend): Promise<RubricSaveReport>;
   listAccounts(): Promise<Account[]>;
   createAccount(input: AccountInput): Promise<{ account: Account; tempPassword: string }>;
   updateAccount(id: string, patch: AccountPatch): Promise<void>;
@@ -129,7 +123,6 @@ function initial(): State {
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
     grading: seedGrading(),
-    programs: PROGRAMS,
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     currentUserId: "u-ramos",
     hydrated: false,
@@ -193,7 +186,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
-        programs: state.programs, accounts: state.accounts, currentUserId: state.currentUserId,
+        accounts: state.accounts, currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
   }, [state]);
@@ -274,8 +267,8 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         replaceAll(deleteScheduledSession(stateRef.current, sessionId));
         return "Session removed from the schedule.";
       },
-      async saveRubric(programId, stage, drafts, blend) {
-        const { state: next, report } = saveStageRubric(stateRef.current, programId, stage, drafts, blend);
+      async saveRubric(stage, drafts, blend) {
+        const { state: next, report } = saveStageRubric(stateRef.current, stage, drafts, blend);
         replaceAll(next);
         return report;
       },
@@ -288,11 +281,9 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const s = stateRef.current;
         const problems = accountProblems(input, s.accounts);
         if (problems.length) throw new Error(problems.join(" "));
-        if (input.role !== "superadmin" && !input.program_id) throw new Error("Choose a course for this account.");
         const account: Account = {
           id: uid("u"), email: input.email.trim().toLowerCase(), full_name: input.full_name.trim(), role: input.role,
           department: input.department.trim() || null, is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
-          program_id: input.role === "superadmin" ? null : input.program_id ?? null,
         };
         replaceAll({ ...s, accounts: [...s.accounts, account] });
         return { account, tempPassword: generateTempPassword() };
@@ -316,25 +307,6 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const problem = accountChangeProblem(s.currentUserId, target, { active });
         if (problem) throw new Error(problem);
         replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, is_active: active } : a)) });
-      },
-
-      async createProgram(input) {
-        const s = stateRef.current;
-        const problem = programProblem(input, s.programs);
-        if (problem) throw new Error(problem);
-        const program: Program = { id: uid("prog"), code: input.code.trim().toUpperCase(), name: input.name.trim(), project_term: input.project_term };
-        // New courses start from a copy of BSIT's active rubric and grade split.
-        const src = s.programs.find((p) => p.code === "BSIT") ?? s.programs[0];
-        const rubric = [...s.rubric, ...s.rubric.filter((c) => c.program_id === src.id && c.is_active !== false)
-          .map((c) => ({ ...c, id: uid("c"), program_id: program.id }))];
-        replaceAll({ ...s, programs: [...s.programs, program], rubric, grading: { ...s.grading, [program.id]: s.grading[src.id] } });
-        return program;
-      },
-      async updateProgram(id, input) {
-        const s = stateRef.current;
-        const problem = programProblem(input, s.programs, id);
-        if (problem) throw new Error(problem);
-        replaceAll({ ...s, programs: s.programs.map((p) => (p.id === id ? { ...p, code: input.code.trim().toUpperCase(), name: input.name.trim(), project_term: input.project_term } : p)) });
       },
 
       // Members live on every bundle of the project (demo keeps a copy per session).
@@ -383,7 +355,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
           }
           const account: Account = existing ?? {
             id: uid("u"), email, full_name: m.student_name, role: "student", department: b.project.group_label,
-            is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null, program_id: b.project.program_id,
+            is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
           };
           s = { ...mapMembers(s, projectId, (ms) => ms.map((x) => (x.id === m.id ? { ...x, user_id: account.id } : x))),
                 accounts: existing ? s.accounts : [...s.accounts, account] };

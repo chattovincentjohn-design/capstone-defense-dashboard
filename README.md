@@ -17,16 +17,6 @@ Use **"Viewing as"** to switch between Chair, Panelists, Secretary, Adviser, Coo
 individual criteria and submit. Open **Deliberation**, then **Finalize & Lock**. Then as *Engr. Reyes* (Adviser),
 resolve revisions, and open the printable Rating Sheet and Minutes. **Reset demo data** is on the home page.
 
-## Courses and roles
-
-The app serves several courses (BSIT, BSISM, BSA, BSCRIM, BSED out of the box). Each course has its
-own rubric and grade split, its own groups and one **Course Coordinator** who can only manage that
-course. Panelists, chairs and secretaries may come from any course.
-
-A **Super Admin** sees every course, can add or rename courses (*Courses* tab; a new course starts with
-a copy of the BSIT rubric), and can create Coordinators for any course. In the console, the super
-admin picks the course to work on from the selector at the top.
-
 ## Coordinator console (`/admin`)
 
 Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordinator console* from the home page.

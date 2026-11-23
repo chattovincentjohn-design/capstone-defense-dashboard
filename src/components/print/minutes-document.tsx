@@ -12,7 +12,7 @@ export function MinutesDocument({ bundle, viewer, userById }: { bundle: SessionB
 
   return (
     <PrintShell sessionId={session.id} draft={!m.chair_approved_at}>
-      <DocHeader title="Minutes of the Defense" subtitle={`${STAGE_LABEL[session.stage]} · A.Y. ${project.academic_year}`} programId={project.program_id} />
+      <DocHeader title="Minutes of the Defense" subtitle={`${STAGE_LABEL[session.stage]} · A.Y. ${project.academic_year}`} />
       {!canReadMinutes(viewer, bundle) ? (
         <p className="border border-black p-4 text-center">Minutes are released after Chair approval.</p>
       ) : (

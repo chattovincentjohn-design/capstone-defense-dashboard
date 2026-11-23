@@ -7,10 +7,11 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, groupScoringStarted, programProblem, isRubricSyncable, memberProblems, saveStageRubric,
+  activeRubric, blendFor, buildAttendance, groupScoringStarted, isRubricSyncable, memberProblems, saveStageRubric,
   sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
+import { seedGrading } from "../mock-data";
 import { applyMinutes, applyScore, StoreContext, type MemberAccountResult, type State, type StoreCtx, type StoreOps } from "../store";
 import type { DefenseMinutes, RubricScore, SessionBundle, User } from "../types";
 import { isPublicPath } from "../redirect";
@@ -21,7 +22,7 @@ const SCORE_SAVE_MS = 500;
 const MINUTES_SAVE_MS = 800;
 const RELOAD_DEBOUNCE_MS = 250;
 
-const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: {}, programs: [], accounts: [], currentUserId: "", hydrated: false };
+const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], currentUserId: "", hydrated: false };
 const GUEST: User = { id: "", full_name: "Signed out", email: "", role: "student", department: null };
 
 const message = (e: unknown) =>
@@ -92,8 +93,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         bundles: Object.fromEntries(bundles.map((b) => [b.session.id, overlayPending(b)])),
         order: ids,
         rubric,
-        grading,
-        programs: await repo.listPrograms(sb),
+        grading: { ...seedGrading(), ...grading },
         accounts: [],
         currentUserId: user.id,
         hydrated: true,
@@ -224,7 +224,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         const created = await repo.createProject(sb, {
           title: p.title.trim(), group_label: p.group_label.trim(), abstract: p.abstract.trim() || null,
           manuscript_url: p.manuscript_url.trim() || null, demo_url: p.demo_url.trim() || null,
-          adviser_id: p.adviser_id, academic_year: p.academic_year.trim(), program_id: draft.programId,
+          adviser_id: p.adviser_id, academic_year: p.academic_year.trim(),
         }, p.members);
         projectId = created.id;
         adviserId = created.adviser_id;
@@ -283,11 +283,11 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       return "Session removed from the schedule.";
     },
 
-    async saveRubric(programId, stage, drafts, blend) {
+    async saveRubric(stage, drafts, blend) {
       const s = stateRef.current;
       // Validates and computes the same report the demo shows; throws on invalid input.
-      const { report } = saveStageRubric(s, programId, stage, drafts, blend);
-      const current = activeRubric(s.rubric, programId, stage);
+      const { report } = saveStageRubric(s, stage, drafts, blend);
+      const current = activeRubric(s.rubric, stage);
 
       for (const old of current) {
         if (!drafts.some((d) => d.id === old.id)) await repo.retireCriterion(sb, old.id);
@@ -295,7 +295,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       for (const d of drafts) {
         if (d.id.startsWith("new-")) {
           await repo.addCriterion(sb, {
-            program_id: programId, stage, scope: d.scope, criterion_name: d.criterion_name.trim(), description: d.description,
+            stage, scope: d.scope, criterion_name: d.criterion_name.trim(), description: d.description,
             weight_percentage: d.weight_percentage, max_score: d.max_score, sort_order: d.sort_order, is_active: true,
           });
           continue;
@@ -306,11 +306,11 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
           await repo.reviseCriterion(sb, d);
         }
       }
-      if (report.blendChanged || JSON.stringify(blendFor(s, programId, stage)) !== JSON.stringify(blend)) {
-        await repo.setStageBlend(sb, programId, stage, blend);
+      if (report.blendChanged || JSON.stringify(blendFor(s, stage)) !== JSON.stringify(blend)) {
+        await repo.setStageBlend(sb, stage, blend);
       }
       for (const b of Object.values(s.bundles)) {
-        if (b.session.stage === stage && b.project.program_id === programId && isRubricSyncable(b)) await repo.syncSessionRubric(sb, b.session.id);
+        if (b.session.stage === stage && isRubricSyncable(b)) await repo.syncSessionRubric(sb, b.session.id);
       }
       await loadAll();
       return report;
@@ -329,19 +329,6 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
     async updateAccount(id, patch) {
       await repo.updateAccount(sb, id, patch);
       setUsers(await repo.listUsers(sb));
-    },
-    async createProgram(input) {
-      const problem = programProblem(input, stateRef.current.programs);
-      if (problem) throw new Error(problem);
-      const created = await repo.createProgram(sb, { ...input, code: input.code.trim().toUpperCase(), name: input.name.trim() });
-      await loadAll();
-      return created;
-    },
-    async updateProgram(id, input) {
-      const problem = programProblem(input, stateRef.current.programs, id);
-      if (problem) throw new Error(problem);
-      await repo.updateProgram(sb, id, input);
-      await loadAll();
     },
     resetPassword: (id) => repo.resetPassword(sb, id),
     setAccountActive: (id, active) => repo.setAccountActive(sb, id, active),

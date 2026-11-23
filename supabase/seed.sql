@@ -1,10 +1,7 @@
 -- Default rubric criteria (editable by Admin / Capstone Coordinator).
 -- Weights within each (stage, scope) must total 100.
 
--- Every course (program) gets its own copy; each Coordinator edits theirs in the app.
-insert into public.rubric_criteria (program_id, stage, scope, criterion_name, description, weight_percentage, max_score, sort_order)
-select p.id, v.stage::public.defense_stage, v.scope::public.rubric_scope, v.criterion_name, v.description, v.weight, v.max_score, v.sort_order
-from public.programs p cross join (values
+insert into public.rubric_criteria (stage, scope, criterion_name, description, weight_percentage, max_score, sort_order) values
   -- FINAL DEFENSE — group
   ('final', 'group', 'System Functionality', 'Completeness, correctness and stability of the deployed system against stated objectives.', 35, 5, 1),
   ('final', 'group', 'Technical Documentation', 'Manuscript quality, adherence to format, user/technical manuals.', 25, 5, 2),
@@ -25,7 +22,7 @@ from public.programs p cross join (values
   -- TITLE DEFENSE — group
   ('title', 'group', 'Relevance & Feasibility', 'Alignment with program and doability within the term.', 50, 5, 1),
   ('title', 'group', 'Novelty', 'Distinctness from existing systems.', 50, 5, 2),
-  ('title', 'individual', 'Presentation & Q&A', 'Ability to justify the proposed title.', 100, 5, 1)) as v(stage, scope, criterion_name, description, weight, max_score, sort_order);
+  ('title', 'individual', 'Presentation & Q&A', 'Ability to justify the proposed title.', 100, 5, 1);
 
 -- After creating auth users in Dashboard → Authentication, promote roles, e.g.:
 -- update public.users set role = 'admin' where email = 'coordinator@school.edu';

@@ -2,26 +2,16 @@
  * Realistic seed data so the UI runs without a database.
  * Shapes are identical to Supabase rows (see lib/types.ts).
  */
-import type { DefenseStage, Program, RubricCriterion, RubricScore, SessionBundle, StageBlend, User } from "./types";
-
-export const PROGRAMS: Program[] = [
-  { id: "prog-bsit", code: "BSIT", name: "BS Information Technology", project_term: "Capstone" },
-  { id: "prog-bsism", code: "BSISM", name: "BS Industrial Security Management", project_term: "Thesis" },
-  { id: "prog-bsa", code: "BSA", name: "BS Agriculture", project_term: "Thesis" },
-  { id: "prog-bscrim", code: "BSCRIM", name: "BS Criminology", project_term: "Thesis" },
-  { id: "prog-bsed", code: "BSED", name: "BS Education", project_term: "Thesis" },
-];
-const BSIT = "prog-bsit";
+import type { DefenseStage, RubricCriterion, RubricScore, SessionBundle, StageBlend, User } from "./types";
 
 export const USERS: User[] = [
-  { id: "u-super", full_name: "Dr. Elena R. Santos", email: "superadmin@demo.edu", role: "superadmin", department: "Office of the VP for Academic Affairs", program_id: null },
-  { id: "u-admin", full_name: "Engr. Liza M. Fernandez", email: "coordinator@demo.edu", role: "admin", department: "College of Computing Studies", program_id: BSIT },
-  { id: "u-ramos", full_name: "Dr. Antonio C. Ramos", email: "aramos@demo.edu", role: "chair", department: "College of Computing Studies", program_id: BSIT },
-  { id: "u-diaz", full_name: "Prof. Maria L. Diaz", email: "mdiaz@demo.edu", role: "panelist", department: "College of Computing Studies", program_id: BSIT },
-  { id: "u-gomez", full_name: "Prof. Carlo B. Gomez", email: "cgomez@demo.edu", role: "panelist", department: "College of Engineering", program_id: BSIT },
-  { id: "u-sec", full_name: "Ms. Joy A. Villanueva", email: "jvillanueva@demo.edu", role: "secretary", department: "Office of Research", program_id: BSIT },
-  { id: "u-reyes", full_name: "Engr. Paolo D. Reyes", email: "preyes@demo.edu", role: "adviser", department: "College of Computing Studies", program_id: BSIT },
-  { id: "u-stud", full_name: "Andrea Lim", email: "alim@student.demo.edu", role: "student", department: "BSIT 4-A", program_id: BSIT },
+  { id: "u-admin", full_name: "Engr. Liza M. Fernandez", email: "coordinator@demo.edu", role: "admin", department: "College of Computing Studies" },
+  { id: "u-ramos", full_name: "Dr. Antonio C. Ramos", email: "aramos@demo.edu", role: "chair", department: "College of Computing Studies" },
+  { id: "u-diaz", full_name: "Prof. Maria L. Diaz", email: "mdiaz@demo.edu", role: "panelist", department: "College of Computing Studies" },
+  { id: "u-gomez", full_name: "Prof. Carlo B. Gomez", email: "cgomez@demo.edu", role: "panelist", department: "College of Engineering" },
+  { id: "u-sec", full_name: "Ms. Joy A. Villanueva", email: "jvillanueva@demo.edu", role: "secretary", department: "Office of Research" },
+  { id: "u-reyes", full_name: "Engr. Paolo D. Reyes", email: "preyes@demo.edu", role: "adviser", department: "College of Computing Studies" },
+  { id: "u-stud", full_name: "Andrea Lim", email: "alim@student.demo.edu", role: "student", department: "BSIT 4-A" },
 ];
 
 export const FINAL_CRITERIA: RubricCriterion[] = [
@@ -50,20 +40,16 @@ export const TITLE_CRITERIA: RubricCriterion[] = [
 
 /** Rubric templates (what the Coordinator edits). Sessions keep their own snapshot. */
 export function seedRubric(): RubricCriterion[] {
-  const base = [...TITLE_CRITERIA, ...PROPOSAL_CRITERIA, ...FINAL_CRITERIA];
-  // BSIT keeps the original ids (used by the seeded defenses); other courses get their own copies.
-  return PROGRAMS.flatMap((p) => base.map((c) => ({
-    ...c, id: p.id === BSIT ? c.id : `${c.id}-${p.code.toLowerCase()}`, program_id: p.id, is_active: true,
-  })));
+  return [...TITLE_CRITERIA, ...PROPOSAL_CRITERIA, ...FINAL_CRITERIA].map((c) => ({ ...c, is_active: true }));
 }
 
 /** Default final-grade blend per stage (Coordinator-editable). */
-export function seedGrading(): Record<string, Record<DefenseStage, StageBlend>> {
-  return Object.fromEntries(PROGRAMS.map((p) => [p.id, {
+export function seedGrading(): Record<DefenseStage, StageBlend> {
+  return {
     title: { groupWeight: 60, individualWeight: 40 },
     proposal: { groupWeight: 60, individualWeight: 40 },
     final: { groupWeight: 60, individualWeight: 40 },
-  }]));
+  };
 }
 
 function scoreRows(sessionId: string, assignmentId: string, rows: [string, string | null, number][]): RubricScore[] {
@@ -93,7 +79,7 @@ export function seedBundles(): SessionBundle[] {
         id: "p-g4", group_label: "Group 4", title: "IoT-Based Smart Agriculture System",
         abstract: "A low-cost sensor network (soil moisture, pH, temperature) with LoRa uplink and an offline-first mobile dashboard that automates irrigation scheduling for smallholder rice farms.",
         manuscript_url: "/sample-manuscript.pdf", demo_url: "https://example.com/smart-agri-demo",
-        adviser_id: "u-reyes", academic_year: "2026-2027", program_id: BSIT,
+        adviser_id: "u-reyes", academic_year: "2026-2027",
       },
       members: [
         { id: "m-g4-1", project_id: "p-g4", student_name: "Andrea Lim", student_number: "2022-00417", user_id: "u-stud" },
@@ -157,7 +143,7 @@ export function seedBundles(): SessionBundle[] {
       project: {
         id: "p-g7", group_label: "Group 7", title: "AI-Assisted Enrollment Queue Management System",
         abstract: "A queue forecasting and SMS-notification platform that predicts registrar load and assigns time slots during enrollment week.",
-        manuscript_url: "/sample-manuscript.pdf", demo_url: null, adviser_id: "u-reyes", academic_year: "2026-2027", program_id: BSIT,
+        manuscript_url: "/sample-manuscript.pdf", demo_url: null, adviser_id: "u-reyes", academic_year: "2026-2027",
       },
       members: [
         { id: "m-g7-1", project_id: "p-g7", student_name: "Rafael Torres", student_number: "2022-00102" },

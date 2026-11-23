@@ -8,7 +8,7 @@
 import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
-  Account, AccountInput, CapstoneProject, MemberInput, Program, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
+  Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
   RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
@@ -16,7 +16,7 @@ import { uid } from "./utils";
 
 /** Assumed slot length used for double-booking checks. */
 export const DEFENSE_SLOT_MINUTES = 120;
-export const FACULTY_ROLES: User["role"][] = ["chair", "panelist", "adviser", "admin", "superadmin"];
+export const FACULTY_ROLES: User["role"][] = ["chair", "panelist", "adviser", "admin"];
 
 // ---------------------------------------------------------------------------
 // Time helpers — schedules are entered and shown in campus time (UTC+8, no DST)
@@ -32,9 +32,8 @@ export function fromManilaInput(local: string): string {
 // ---------------------------------------------------------------------------
 // Rubric
 // ---------------------------------------------------------------------------
-/** Active template criteria for one course and stage. */
-export function activeRubric(rubric: RubricCriterion[], programId: string, stage: DefenseStage) {
-  return rubric.filter((c) => c.program_id === programId && c.stage === stage && c.is_active !== false).sort((a, b) => a.sort_order - b.sort_order);
+export function activeRubric(rubric: RubricCriterion[], stage: DefenseStage) {
+  return rubric.filter((c) => c.stage === stage && c.is_active !== false).sort((a, b) => a.sort_order - b.sort_order);
 }
 
 export function weightTotals(criteria: RubricCriterion[]) {
@@ -74,8 +73,8 @@ export const isRubricSyncable = (b: SessionBundle) => !b.session.is_locked && !s
 export const isCriterionInUse = (id: string, bundles: SessionBundle[]) =>
   bundles.some((b) => !isRubricSyncable(b) && b.criteria.some((c) => c.id === id));
 
-const snapshot = (rubric: RubricCriterion[], programId: string, stage: DefenseStage) =>
-  activeRubric(rubric, programId, stage).map((c) => {
+const snapshot = (rubric: RubricCriterion[], stage: DefenseStage) =>
+  activeRubric(rubric, stage).map((c) => {
     const copy = { ...c };
     delete copy.is_active;
     return copy;
@@ -84,8 +83,8 @@ const snapshot = (rubric: RubricCriterion[], programId: string, stage: DefenseSt
 // ---------------------------------------------------------------------------
 // Final-grade blend (group vs individual), per stage
 // ---------------------------------------------------------------------------
-export function blendFor(state: Pick<State, "grading">, programId: string, stage: DefenseStage): StageBlend {
-  return state.grading?.[programId]?.[stage] ?? { groupWeight: DEFAULT_GRADING_CONFIG.groupWeight, individualWeight: DEFAULT_GRADING_CONFIG.individualWeight };
+export function blendFor(state: Pick<State, "grading">, stage: DefenseStage): StageBlend {
+  return state.grading?.[stage] ?? { groupWeight: DEFAULT_GRADING_CONFIG.groupWeight, individualWeight: DEFAULT_GRADING_CONFIG.individualWeight };
 }
 
 export function blendProblems(b: StageBlend): string[] {
@@ -115,15 +114,14 @@ export interface RubricSaveReport {
  * Throws if the resulting rubric is invalid.
  */
 export function saveStageRubric(
-  state: State, programId: string, stage: DefenseStage, drafts: RubricCriterion[],
-  blend: StageBlend = blendFor(state, programId, stage),
+  state: State, stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend = blendFor(state, stage),
 ): { state: State; report: RubricSaveReport } {
   const problems = [...blendProblems(blend), ...rubricProblems(drafts)];
   if (problems.length) throw new Error(problems.join(" "));
 
   const bundles = Object.values(state.bundles);
-  const current = activeRubric(state.rubric, programId, stage);
-  const prevBlend = blendFor(state, programId, stage);
+  const current = activeRubric(state.rubric, stage);
+  const prevBlend = blendFor(state, stage);
   const report: RubricSaveReport = {
     updated: 0, versioned: 0, added: 0, retired: 0, synced: [], frozen: [],
     blendChanged: prevBlend.groupWeight !== blend.groupWeight || prevBlend.individualWeight !== blend.individualWeight,
@@ -134,7 +132,7 @@ export function saveStageRubric(
 
   for (const d of drafts) {
     if (d.id.startsWith("new-")) {
-      rubric.push({ ...d, id: uid("c"), program_id: programId, stage, is_active: true });
+      rubric.push({ ...d, id: uid("c"), stage, is_active: true });
       report.added++;
       continue;
     }
@@ -145,10 +143,10 @@ export function saveStageRubric(
     if (!core && !meta) continue;
     if (core && isCriterionInUse(old.id, bundles)) {
       rubric = rubric.map((c) => (c.id === old.id ? { ...c, is_active: false } : c));
-      rubric.push({ ...d, id: uid("c"), program_id: programId, stage, scope: old.scope, is_active: true });
+      rubric.push({ ...d, id: uid("c"), stage, scope: old.scope, is_active: true });
       report.versioned++;
     } else {
-      rubric = rubric.map((c) => (c.id === old.id ? { ...d, program_id: programId, stage, scope: old.scope, is_active: true } : c));
+      rubric = rubric.map((c) => (c.id === old.id ? { ...d, stage, scope: old.scope, is_active: true } : c));
       if (!core) cosmetic.set(old.id, { description: d.description, sort_order: d.sort_order });
       report.updated++;
     }
@@ -163,12 +161,12 @@ export function saveStageRubric(
 
   const nextBundles: Record<string, SessionBundle> = {};
   for (const [id, b] of Object.entries(state.bundles)) {
-    if (b.session.stage !== stage || b.project.program_id !== programId) { nextBundles[id] = b; continue; }
+    if (b.session.stage !== stage) { nextBundles[id] = b; continue; }
     if (isRubricSyncable(b)) {
       nextBundles[id] = {
         ...b,
         session: { ...b.session, group_weight: blend.groupWeight, individual_weight: blend.individualWeight },
-        criteria: snapshot(rubric, programId, stage),
+        criteria: snapshot(rubric, stage),
       };
       report.synced.push(id);
     } else {
@@ -176,8 +174,7 @@ export function saveStageRubric(
       report.frozen.push(id);
     }
   }
-  const grading = { ...state.grading, [programId]: { ...state.grading?.[programId], [stage]: blend } } as State["grading"];
-  return { state: { ...state, rubric, grading, bundles: nextBundles }, report };
+  return { state: { ...state, rubric, grading: { ...state.grading, [stage]: blend }, bundles: nextBundles }, report };
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +193,6 @@ export interface NewProjectInput {
 
 export interface ScheduleDraft {
   sessionId?: string;            // set when editing
-  programId: string;             // course for a new project (existing projects keep theirs)
   projectId: string | "new";
   newProject?: NewProjectInput;
   stage: DefenseStage;
@@ -209,15 +205,16 @@ export interface ScheduleDraft {
 
 export interface Issue { level: "error" | "warning"; message: string }
 
-export function listProjects(state: State, programId?: string) {
+export function listProjects(state: State) {
   const map = new Map<string, { project: CapstoneProject; members: ProjectMember[] }>();
   for (const id of state.order) {
     const b = state.bundles[id];
-    if (b && (!programId || b.project.program_id === programId) && !map.has(b.project.id)) map.set(b.project.id, { project: b.project, members: b.members });
+    if (b && !map.has(b.project.id)) map.set(b.project.id, { project: b.project, members: b.members });
   }
   return [...map.values()];
 }
 
+/** Parse "Name, 2022-00001" lines. */
 /** Parse "Name, Student No.[, email]" lines (comma, semicolon or tab separated). */
 export function parseMembers(text: string) {
   return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
@@ -239,7 +236,6 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
   // project
   let adviserId: string | null = null;
   let projectId = draft.projectId;
-  let programId = draft.programId;
   if (draft.projectId === "new") {
     const p = draft.newProject;
     if (!p?.title.trim()) err("Project title is required.");
@@ -257,7 +253,6 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
     const proj = listProjects(state).find((x) => x.project.id === draft.projectId);
     if (!proj) err("Select a project.");
     adviserId = proj?.project.adviser_id ?? null;
-    programId = proj?.project.program_id ?? programId;
   }
 
   // when
@@ -297,10 +292,9 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
 
   // rubric
   if (!editing || isRubricSyncable(editing)) {
-    if (!programId) err("Choose a course.");
-    const problems = rubricProblems(activeRubric(state.rubric, programId, draft.stage));
+    const problems = rubricProblems(activeRubric(state.rubric, draft.stage));
     if (problems.length) err(`The ${STAGE_LABEL[draft.stage]} rubric is not ready: ${problems[0]}`);
-    const bp = blendProblems(blendFor(state, programId, draft.stage));
+    const bp = blendProblems(blendFor(state, draft.stage));
     if (bp.length) err(`The ${STAGE_LABEL[draft.stage]} grade blend is not ready: ${bp[0]}`);
   }
 
@@ -346,7 +340,7 @@ export function scheduleSession(state: State, draft: ScheduleDraft, users: User[
     project = {
       id: projectId, title: p.title.trim(), group_label: p.group_label.trim(), abstract: p.abstract.trim() || null,
       manuscript_url: p.manuscript_url.trim() || null, demo_url: p.demo_url.trim() || null,
-      adviser_id: p.adviser_id, academic_year: p.academic_year.trim(), program_id: draft.programId,
+      adviser_id: p.adviser_id, academic_year: p.academic_year.trim(),
     };
     members = p.members.map((m) => ({ id: uid("m"), project_id: projectId, ...m }));
   } else {
@@ -365,12 +359,11 @@ export function scheduleSession(state: State, draft: ScheduleDraft, users: User[
   const bundle: SessionBundle = {
     session: {
       id: sessionId, project_id: project.id, stage: draft.stage, scheduled_at: draft.scheduledAt,
-      group_weight: blendFor(state, project.program_id, draft.stage).groupWeight,
-      individual_weight: blendFor(state, project.program_id, draft.stage).individualWeight,
+      group_weight: blendFor(state, draft.stage).groupWeight, individual_weight: blendFor(state, draft.stage).individualWeight,
       room_or_link: draft.room.trim(), secretary_id: draft.secretaryId, verdict: null, is_locked: false,
       locked_at: null, chair_signature_hash: null,
     },
-    project, members, assignments, criteria: snapshot(state.rubric, project.program_id, draft.stage), scores: [], comments: [], minutes,
+    project, members, assignments, criteria: snapshot(state.rubric, draft.stage), scores: [], comments: [], minutes,
   };
   const bundles = { ...state.bundles, [sessionId]: bundle };
   const order = sortedOrder(bundles);
@@ -395,13 +388,10 @@ export function updateScheduledSession(state: State, draft: ScheduleDraft, users
     ...b,
     session: {
       ...b.session, stage: draft.stage, scheduled_at: draft.scheduledAt, room_or_link: draft.room.trim(), secretary_id: draft.secretaryId,
-      ...(stageChanged && {
-        group_weight: blendFor(state, b.project.program_id, draft.stage).groupWeight,
-        individual_weight: blendFor(state, b.project.program_id, draft.stage).individualWeight,
-      }),
+      ...(stageChanged && { group_weight: blendFor(state, draft.stage).groupWeight, individual_weight: blendFor(state, draft.stage).individualWeight }),
     },
     assignments,
-    criteria: stageChanged ? snapshot(state.rubric, b.project.program_id, draft.stage) : b.criteria,
+    criteria: stageChanged ? snapshot(state.rubric, draft.stage) : b.criteria,
     comments: b.comments.filter((c) => keptIds.has(c.panel_assignment_id)),
     minutes,
   };
@@ -481,7 +471,7 @@ export function generateTempPassword(): string {
 export function accountChangeProblem(actorId: string, target: Account, change: { role?: Account["role"]; active?: boolean }): string | null {
   if (target.id !== actorId) return null;
   if (change.active === false) return "You cannot disable your own account.";
-  if (change.role && (target.role === "admin" || target.role === "superadmin") && change.role !== target.role) return "You cannot change your own administrator role.";
+  if (change.role && target.role === "admin" && change.role !== "admin") return "You cannot remove your own Coordinator role.";
   return null;
 }
 
@@ -517,20 +507,3 @@ export function gradeVisibleMembers(
   if (staff || !viewer.isStudent) return bundle.members;
   return bundle.members.filter((m) => m.user_id === viewer.user.id);
 }
-
-// ---------------------------------------------------------------------------
-// Courses (programs)
-// ---------------------------------------------------------------------------
-export function programProblem(input: Pick<Program, "code" | "name">, programs: Program[], editingId?: string): string | null {
-  const code = input.code.trim().toUpperCase();
-  if (!/^[A-Z0-9-]{2,12}$/.test(code)) return "Course code must be 2–12 letters, numbers or dashes (e.g. BSIT).";
-  if (!input.name.trim()) return "Course name is required.";
-  if (programs.some((p) => p.id !== editingId && p.code === code)) return `${code} already exists.`;
-  return null;
-}
-
-/** Can this person manage (schedule, rubric, groups, accounts) the given course? */
-export const canAdminProgram = (user: Pick<User, "role" | "program_id">, programId: string | null | undefined) =>
-  user.role === "superadmin" || (user.role === "admin" && !!programId && user.program_id === programId);
-
-export const isAnyAdmin = (user: Pick<User, "role">) => user.role === "admin" || user.role === "superadmin";

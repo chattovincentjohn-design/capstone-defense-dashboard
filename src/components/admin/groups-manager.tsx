@@ -13,10 +13,10 @@ import { cn } from "@/lib/utils";
 const errText = (e: unknown) => (e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
 const BLANK: MemberInput = { student_name: "", student_number: "", email: "" };
 
-export function GroupsManager({ programId }: { programId: string }) {
+export function GroupsManager() {
   const { state, ops } = useStore();
   const [query, setQuery] = React.useState("");
-  const projects = listProjects(state, programId);
+  const projects = listProjects(state);
   const bundles = Object.values(state.bundles);
   const q = query.trim().toLowerCase();
   const shown = projects.filter(({ project, members }) =>
