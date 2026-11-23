@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, cleanRegistration, codeMatches, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -353,5 +353,14 @@ describe("group self-registration", () => {
     expect(codeMatches(" scs-2026 ", "SCS-2026")).toBe(true);
     expect(codeMatches("SCS-2025", "SCS-2026")).toBe(false);
     expect(codeMatches("", "")).toBe(false);
+  });
+  it("generates readable, unique registration codes", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const c = generateRegistrationCode();
+      expect(c).toMatch(/^SCS-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/);
+      seen.add(c);
+    }
+    expect(seen.size).toBe(200);
   });
 });
