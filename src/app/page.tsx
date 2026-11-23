@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { CalendarClock, RotateCcw } from "lucide-react";
+import { CalendarClock, RotateCcw, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -26,7 +26,12 @@ export default function Home() {
           <h1 className="text-xl font-bold uppercase tracking-wider">Capstone Defense Panel Dashboard</h1>
           <p className="text-sm text-muted-foreground">Demo mode · data persists in this browser. Switch identity to test each role.</p>
         </div>
-        <RoleSwitcher />
+        <div className="flex flex-wrap items-center gap-2">
+          {currentUser.role === "admin" && (
+            <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> Coordinator console</Link></Button>
+          )}
+          <RoleSwitcher />
+        </div>
       </header>
 
       <Card>

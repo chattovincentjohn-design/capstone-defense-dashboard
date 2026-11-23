@@ -67,6 +67,7 @@ export interface RubricCriterion {
   weight_percentage: number;
   max_score: number;
   sort_order: number;
+  is_active?: boolean; // templates only; session snapshots omit it
 }
 
 export interface RubricScore {

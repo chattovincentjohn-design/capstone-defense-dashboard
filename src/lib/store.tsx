@@ -5,16 +5,18 @@
  * see live status updates (the production equivalent is lib/supabase/realtime.ts).
  */
 import * as React from "react";
-import { seedBundles, USERS } from "./mock-data";
+import { seedBundles, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
-import type { DefenseMinutes, PanelComment, SessionBundle, User, Verdict } from "./types";
+import type { DefenseMinutes, PanelComment, RubricCriterion, SessionBundle, User, Verdict } from "./types";
 import { uid } from "./utils";
 
 const STORAGE_KEY = "cdms-demo-state-v1";
 
-interface State {
+export interface State {
   bundles: Record<string, SessionBundle>;
+  /** Rubric templates edited by the Coordinator (sessions hold frozen snapshots). */
+  rubric: RubricCriterion[];
   order: string[];
   currentUserId: string;
   hydrated: boolean;
@@ -23,6 +25,7 @@ interface State {
 type Action =
   | { type: "replace"; state: Omit<State, "hydrated"> }
   | { type: "setUser"; userId: string }
+  | { type: "patchState"; fn: (s: State) => State }
   | { type: "patchBundle"; sessionId: string; fn: (b: SessionBundle) => SessionBundle };
 
 function initial(): State {
@@ -30,6 +33,7 @@ function initial(): State {
   return {
     bundles: Object.fromEntries(bundles.map((b) => [b.session.id, b])),
     order: bundles.map((b) => b.session.id),
+    rubric: seedRubric(),
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -41,6 +45,8 @@ function reducer(state: State, action: Action): State {
       return { ...action.state, hydrated: true };
     case "setUser":
       return { ...state, currentUserId: action.userId };
+    case "patchState":
+      return action.fn(state);
     case "patchBundle": {
       const b = state.bundles[action.sessionId];
       if (!b) return state;
@@ -70,6 +76,7 @@ interface StoreCtx {
   currentUser: User;
   setUser: (id: string) => void;
   patch: (sessionId: string, fn: (b: SessionBundle) => SessionBundle) => void;
+  patchState: (fn: (s: State) => State) => void;
   reset: () => void;
 }
 
@@ -83,7 +90,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     let base: State = initial();
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) base = { ...JSON.parse(raw), hydrated: false };
+      if (raw) base = { ...initial(), ...JSON.parse(raw), hydrated: false }; // older saves lack `rubric`
     } catch { /* storage unavailable → seed */ }
     backfillSignatures(base).then((s) => dispatch({ type: "replace", state: s }));
   }, []);
@@ -92,7 +99,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!state.hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundles: state.bundles, order: state.order, currentUserId: state.currentUserId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundles: state.bundles, order: state.order, rubric: state.rubric, currentUserId: state.currentUserId }));
     } catch { /* ignore */ }
   }, [state]);
 
@@ -102,7 +109,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       if (e.key !== STORAGE_KEY || !e.newValue) return;
       try {
         const incoming = JSON.parse(e.newValue);
-        dispatch({ type: "replace", state: { ...incoming, currentUserId: stateRef.current.currentUserId } });
+        dispatch({ type: "replace", state: { ...initial(), ...incoming, currentUserId: stateRef.current.currentUserId } });
       } catch { /* ignore */ }
     };
     window.addEventListener("storage", onStorage);
@@ -117,6 +124,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     currentUser: USERS.find((u) => u.id === state.currentUserId) ?? USERS[0],
     setUser: (userId) => dispatch({ type: "setUser", userId }),
     patch: (sessionId, fn) => dispatch({ type: "patchBundle", sessionId, fn }),
+    patchState: (fn) => dispatch({ type: "patchState", fn }),
     reset: () => {
       try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
       backfillSignatures(initial()).then((s) => dispatch({ type: "replace", state: { ...s, currentUserId: state.currentUserId } }));

@@ -17,9 +17,24 @@ Use **"Viewing as"** to switch between Chair, Panelists, Secretary, Adviser, Coo
 individual criteria and submit. Open **Deliberation**, then **Finalize & Lock**. Then as *Engr. Reyes* (Adviser),
 resolve revisions, and open the printable Rating Sheet and Minutes. **Reset demo data** is on the home page.
 
+## Coordinator console (`/admin`)
+
+Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordinator console* from the home page.
+
+- **Defense Schedule:** register a project (or pick an existing one), set stage, time (PHT) and venue, and assign
+  Chair, panel members and Secretary. The form blocks putting the adviser on their own group's panel,
+  listing someone twice, putting the Secretary on the panel, and a second open defense for the same project and stage.
+  It warns about panelist, secretary, and room double-booking within a 2-hour slot.
+  Edits can't remove a panelist who has already scored. Sessions with scores can't be deleted.
+  **Export grades (CSV)** downloads results for all locked defenses.
+- **Rubric Configuration:** per stage, add, remove, reorder, and reweight group and individual criteria
+  (each section must total 100%). Each session keeps the rubric it was scheduled with. Saving re-applies the
+  template only to sessions nobody has scored. A criterion graded in a scored or locked session is never edited
+  in place: it is retired and a new version is created, so finished grades never shift.
+
 ## Connect Supabase
 
-1. Run `supabase/migrations/*_capstone_defense.sql`, then `supabase/seed.sql`, in the SQL Editor.
+1. Run both files in `supabase/migrations/` in name order, then `supabase/seed.sql`, in the SQL Editor.
 2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 3. Promote roles: `update public.users set role='admin' where email='…';`
 
@@ -31,6 +46,8 @@ With the env vars set, `src/middleware.ts` enforces login and role-based routes.
 | Path | Purpose |
 |---|---|
 | `supabase/migrations/` | Enums, tables, RLS (blind grading), RPCs `submit_evaluation`, `finalize_defense`, `resolve_revision`, Realtime publication |
+| `src/lib/admin.ts` | Scheduling validation, rubric save/versioning, CSV export (pure functions, unit-tested) |
+| `src/components/admin/` | Coordinator console: schedule manager + form, rubric editor |
 | `src/lib/grading.ts` | Weighted group/individual scoring, 60/40 blend, transmutation, variance flags, suggested verdict |
 | `src/lib/signature.ts` | SHA-256 e-signatures (same format as the SQL RPCs, so they can be checked in the browser) |
 | `src/lib/permissions.ts` | Client-side copy of the RLS rules, used to decide what the UI shows |

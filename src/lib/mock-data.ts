@@ -14,7 +14,7 @@ export const USERS: User[] = [
   { id: "u-stud", full_name: "Andrea Lim", email: "alim@student.demo.edu", role: "student", department: "BSIT 4-A" },
 ];
 
-const FINAL_CRITERIA: RubricCriterion[] = [
+export const FINAL_CRITERIA: RubricCriterion[] = [
   { id: "c-f-g1", stage: "final", scope: "group", criterion_name: "System Functionality", description: "Completeness, correctness and stability of the deployed system against stated objectives.", weight_percentage: 35, max_score: 5, sort_order: 1 },
   { id: "c-f-g2", stage: "final", scope: "group", criterion_name: "Technical Documentation", description: "Manuscript quality, adherence to format, user/technical manuals.", weight_percentage: 25, max_score: 5, sort_order: 2 },
   { id: "c-f-g3", stage: "final", scope: "group", criterion_name: "Methodology & Architecture", description: "Soundness of SDLC, system architecture, database design and testing.", weight_percentage: 25, max_score: 5, sort_order: 3 },
@@ -23,7 +23,7 @@ const FINAL_CRITERIA: RubricCriterion[] = [
   { id: "c-f-i2", stage: "final", scope: "individual", criterion_name: "Q&A Mastery", description: "Accuracy and depth of answers; ownership of the work.", weight_percentage: 50, max_score: 5, sort_order: 2 },
 ];
 
-const PROPOSAL_CRITERIA: RubricCriterion[] = [
+export const PROPOSAL_CRITERIA: RubricCriterion[] = [
   { id: "c-p-g1", stage: "proposal", scope: "group", criterion_name: "Problem Statement & Objectives", description: "Specific, measurable, and grounded in evidence.", weight_percentage: 30, max_score: 5, sort_order: 1 },
   { id: "c-p-g2", stage: "proposal", scope: "group", criterion_name: "Review of Related Literature", description: "Coverage, synthesis, and identified research gap.", weight_percentage: 25, max_score: 5, sort_order: 2 },
   { id: "c-p-g3", stage: "proposal", scope: "group", criterion_name: "Proposed Methodology & Architecture", description: "Feasibility of design, tools and evaluation plan.", weight_percentage: 30, max_score: 5, sort_order: 3 },
@@ -31,6 +31,17 @@ const PROPOSAL_CRITERIA: RubricCriterion[] = [
   { id: "c-p-i1", stage: "proposal", scope: "individual", criterion_name: "Presentation Delivery", description: "Clarity and organization.", weight_percentage: 50, max_score: 5, sort_order: 1 },
   { id: "c-p-i2", stage: "proposal", scope: "individual", criterion_name: "Q&A Mastery", description: "Understanding of the proposal.", weight_percentage: 50, max_score: 5, sort_order: 2 },
 ];
+
+export const TITLE_CRITERIA: RubricCriterion[] = [
+  { id: "c-t-g1", stage: "title", scope: "group", criterion_name: "Relevance & Feasibility", description: "Alignment with program and doability within the term.", weight_percentage: 50, max_score: 5, sort_order: 1 },
+  { id: "c-t-g2", stage: "title", scope: "group", criterion_name: "Novelty", description: "Distinctness from existing systems.", weight_percentage: 50, max_score: 5, sort_order: 2 },
+  { id: "c-t-i1", stage: "title", scope: "individual", criterion_name: "Presentation & Q&A", description: "Ability to justify the proposed title.", weight_percentage: 100, max_score: 5, sort_order: 1 },
+];
+
+/** Rubric templates (what the Coordinator edits). Sessions keep their own snapshot. */
+export function seedRubric(): RubricCriterion[] {
+  return [...TITLE_CRITERIA, ...PROPOSAL_CRITERIA, ...FINAL_CRITERIA].map((c) => ({ ...c, is_active: true }));
+}
 
 function scoreRows(sessionId: string, assignmentId: string, rows: [string, string | null, number][]): RubricScore[] {
   return rows.map(([criterion_id, student_id, score]) => ({
