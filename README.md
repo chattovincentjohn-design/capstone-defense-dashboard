@@ -33,6 +33,11 @@ Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordin
 - **Faculty Accounts** (live mode): create sign-in accounts (temporary password shown once), change role or
   department, reset a password (signs the person out everywhere), disable or re-enable sign-in. Coordinators can't
   disable or demote themselves.
+- **Groups** (`/admin/groups`): each group's proponents (name, student number, email). Add, edit and remove members
+  (adding/removing locks once scoring starts), then **Create sign-in accounts** to give every student their own login,
+  linked to their group. After the defense is locked a student sees the verdict, comments, minutes and **only their
+  own grade**; the database withholds classmates' individual scores. When scheduling a new group, member lines may
+  include an email: `Name, Student No., email`.
 - **Rubric Configuration:** per stage, add, remove, reorder, and reweight group and individual criteria
   (each section must total 100%). Each session keeps the rubric it was scheduled with. Saving re-applies the
   template only to sessions nobody has scored. A criterion graded in a scored or locked session is never edited

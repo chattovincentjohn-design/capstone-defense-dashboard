@@ -1,4 +1,5 @@
 "use client";
+import { gradeVisibleMembers } from "@/lib/admin";
 import { configFor, consolidate, splitCriteria, TRANSMUTATION_TABLE } from "@/lib/grading";
 import { canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle, type User } from "@/lib/types";
@@ -8,7 +9,7 @@ import { DocHeader, MetaTable, PrintShell, SignatureBlock } from "./print-shell"
 export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundle; viewer: Viewer; userById: (id: string) => User | undefined }) {
   const { session, project } = bundle;
   const allowed = canOpenDeliberation(viewer, bundle);
-  const c = consolidate(bundle);
+  const c = consolidate({ ...bundle, members: gradeVisibleMembers(viewer, bundle) });
   const cfg = configFor(bundle);
   const { group, individual } = splitCriteria(bundle.criteria);
   const name = (fid: string) => userById(fid)?.full_name ?? "";

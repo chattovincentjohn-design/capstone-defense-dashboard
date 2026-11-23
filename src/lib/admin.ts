@@ -8,7 +8,7 @@
 import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
-  Account, AccountInput, CapstoneProject, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
+  Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
   RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
@@ -188,7 +188,7 @@ export interface NewProjectInput {
   manuscript_url: string;
   demo_url: string;
   abstract: string;
-  members: { student_name: string; student_number: string }[];
+  members: { student_name: string; student_number: string; email?: string }[];
 }
 
 export interface ScheduleDraft {
@@ -215,10 +215,11 @@ export function listProjects(state: State) {
 }
 
 /** Parse "Name, 2022-00001" lines. */
+/** Parse "Name, Student No.[, email]" lines (comma, semicolon or tab separated). */
 export function parseMembers(text: string) {
   return text.split("\n").map((l) => l.trim()).filter(Boolean).map((l) => {
-    const [name, num = ""] = l.split(/\s*[,;\t]\s*/);
-    return { student_name: name ?? "", student_number: num };
+    const [name, num = "", email = ""] = l.split(/\s*[,;\t]\s*/);
+    return { student_name: name ?? "", student_number: num, email: email.toLowerCase() };
   });
 }
 
@@ -243,6 +244,8 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
     if (!p || p.members.length === 0) err("Add at least one proponent.");
     const nums = (p?.members ?? []).map((m) => m.student_number);
     if (p?.members.some((m) => !m.student_name || !m.student_number)) err('Each proponent line needs "Name, Student No."');
+    const badEmail = p?.members.find((m) => m.email && !EMAIL_RE.test(m.email));
+    if (badEmail) err(`"${badEmail.email}" is not a valid email address.`);
     if (new Set(nums).size !== nums.length) err("Duplicate student numbers.");
     adviserId = p?.adviser_id ?? null;
     projectId = "";
@@ -470,4 +473,37 @@ export function accountChangeProblem(actorId: string, target: Account, change: {
   if (change.active === false) return "You cannot disable your own account.";
   if (change.role && target.role === "admin" && change.role !== "admin") return "You cannot remove your own Coordinator role.";
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Groups & proponents
+// ---------------------------------------------------------------------------
+/** Has any defense of this group started scoring? Then membership is fixed. */
+export function groupScoringStarted(bundles: SessionBundle[], projectId: string) {
+  return bundles.some((b) => b.project.id === projectId && sessionHasScores(b));
+}
+
+export function memberProblems(input: MemberInput, members: ProjectMember[], editingId?: string): string[] {
+  const p: string[] = [];
+  const others = members.filter((m) => m.id !== editingId);
+  if (!input.student_name.trim()) p.push("Student name is required.");
+  if (!input.student_number.trim()) p.push("Student number is required.");
+  else if (others.some((m) => m.student_number.trim() === input.student_number.trim())) p.push("Another member already has this student number.");
+  const email = input.email.trim().toLowerCase();
+  if (email && !EMAIL_RE.test(email)) p.push("Enter a valid email address.");
+  else if (email && others.some((m) => (m.email ?? "").toLowerCase() === email)) p.push("Another member already uses this email.");
+  return p;
+}
+
+/**
+ * Proponents whose grades this viewer may see. A student (who isn't also faculty on
+ * this defense) sees only their own row; the database enforces the same rule.
+ */
+export function gradeVisibleMembers(
+  viewer: { user: User; isAdmin: boolean; isPanelist: boolean; isSecretary: boolean; isAdviser: boolean; isStudent: boolean },
+  bundle: Pick<SessionBundle, "members">,
+): ProjectMember[] {
+  const staff = viewer.isAdmin || viewer.isPanelist || viewer.isSecretary || viewer.isAdviser;
+  if (staff || !viewer.isStudent) return bundle.members;
+  return bundle.members.filter((m) => m.user_id === viewer.user.id);
 }

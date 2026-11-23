@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, deleteScheduledSession, generateTempPassword, saveStageRubric,
+  accountChangeProblem, accountProblems, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  Account, AccountInput, DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
+  Account, AccountInput, DefenseMinutes, DefenseStage, MemberInput, ProjectMember, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
 
@@ -35,6 +35,16 @@ export interface State {
 }
 
 export type AccountPatch = Partial<Pick<Account, "full_name" | "role" | "department">>;
+
+/** Outcome of creating sign-in accounts for a group, per student. */
+export interface MemberAccountResult {
+  memberId: string;
+  name: string;
+  email: string;
+  tempPassword: string | null;   // null when an existing student account was linked
+  linkedExisting: boolean;
+  error?: string;
+}
 
 export type NewComment = Pick<PanelComment, "panel_assignment_id" | "category" | "severity" | "comment_text">;
 
@@ -56,6 +66,10 @@ export interface StoreOps {
   updateAccount(id: string, patch: AccountPatch): Promise<void>;
   resetPassword(id: string): Promise<string>;
   setAccountActive(id: string, active: boolean): Promise<void>;
+  addMember(projectId: string, input: MemberInput): Promise<void>;
+  updateMember(memberId: string, input: MemberInput): Promise<void>;
+  removeMember(memberId: string): Promise<void>;
+  createMemberAccounts(projectId: string): Promise<MemberAccountResult[]>;
 }
 
 export interface StoreCtx {
@@ -143,6 +157,12 @@ async function backfillSignatures(s: State): Promise<State> {
     );
     bundles[id] = { ...b, assignments };
   }
+  return { ...s, bundles };
+}
+
+function mapMembers(s: State, projectId: string, fn: (ms: ProjectMember[]) => ProjectMember[]): State {
+  const bundles = Object.fromEntries(Object.entries(s.bundles).map(([id, b]) =>
+    [id, b.project.id === projectId ? { ...b, members: fn(b.members) } : b]));
   return { ...s, bundles };
 }
 
@@ -287,6 +307,62 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const problem = accountChangeProblem(s.currentUserId, target, { active });
         if (problem) throw new Error(problem);
         replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, is_active: active } : a)) });
+      },
+
+      // Members live on every bundle of the project (demo keeps a copy per session).
+      async addMember(projectId, input) {
+        const s = stateRef.current;
+        const bundles = Object.values(s.bundles).filter((b) => b.project.id === projectId);
+        if (!bundles.length) throw new Error("Group not found.");
+        if (groupScoringStarted(bundles, projectId)) throw new Error("Group membership is locked once scoring has started.");
+        const problems = memberProblems(input, bundles[0].members);
+        if (problems.length) throw new Error(problems.join(" "));
+        const member: ProjectMember = {
+          id: uid("m"), project_id: projectId, student_name: input.student_name.trim(),
+          student_number: input.student_number.trim(), email: input.email.trim().toLowerCase() || null,
+        };
+        replaceAll(mapMembers(s, projectId, (ms) => [...ms, member]));
+      },
+      async updateMember(memberId, input) {
+        const s = stateRef.current;
+        const b = Object.values(s.bundles).find((x) => x.members.some((m) => m.id === memberId));
+        if (!b) throw new Error("Member not found.");
+        const problems = memberProblems(input, b.members, memberId);
+        if (problems.length) throw new Error(problems.join(" "));
+        replaceAll(mapMembers(s, b.project.id, (ms) => ms.map((m) => (m.id === memberId ? {
+          ...m, student_name: input.student_name.trim(), student_number: input.student_number.trim(),
+          email: input.email.trim().toLowerCase() || null,
+        } : m))));
+      },
+      async removeMember(memberId) {
+        const s = stateRef.current;
+        const b = Object.values(s.bundles).find((x) => x.members.some((m) => m.id === memberId));
+        if (!b) throw new Error("Member not found.");
+        if (groupScoringStarted(Object.values(s.bundles), b.project.id)) throw new Error("Group membership is locked once scoring has started.");
+        replaceAll(mapMembers(s, b.project.id, (ms) => ms.filter((m) => m.id !== memberId)));
+      },
+      async createMemberAccounts(projectId) {
+        let s = stateRef.current;
+        const b = Object.values(s.bundles).find((x) => x.project.id === projectId);
+        if (!b) throw new Error("Group not found.");
+        const results: MemberAccountResult[] = [];
+        for (const m of b.members.filter((x) => !x.user_id && x.email)) {
+          const email = m.email!.toLowerCase();
+          const existing = s.accounts.find((a) => a.email.toLowerCase() === email);
+          if (existing && existing.role !== "student") {
+            results.push({ memberId: m.id, name: m.student_name, email, tempPassword: null, linkedExisting: false, error: `${email} belongs to a faculty account` });
+            continue;
+          }
+          const account: Account = existing ?? {
+            id: uid("u"), email, full_name: m.student_name, role: "student", department: b.project.group_label,
+            is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+          };
+          s = { ...mapMembers(s, projectId, (ms) => ms.map((x) => (x.id === m.id ? { ...x, user_id: account.id } : x))),
+                accounts: existing ? s.accounts : [...s.accounts, account] };
+          results.push({ memberId: m.id, name: m.student_name, email, tempPassword: existing ? null : generateTempPassword(), linkedExisting: !!existing });
+        }
+        replaceAll(s);
+        return results;
       },
     };
   }, []);

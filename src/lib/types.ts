@@ -30,6 +30,12 @@ export interface AccountInput {
   department: string;
 }
 
+export interface MemberInput {
+  student_name: string;
+  student_number: string;
+  email: string;
+}
+
 export interface CapstoneProject {
   id: string;
   title: string;
@@ -47,6 +53,8 @@ export interface ProjectMember {
   student_name: string;
   student_number: string;
   user_id?: string | null;
+  /** Used to create and link the student's sign-in account. */
+  email?: string | null;
 }
 
 export interface DefenseSession {

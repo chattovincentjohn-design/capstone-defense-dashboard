@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
+import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, assignmentHasScores, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -249,5 +250,40 @@ describe("scoring status under blind grading (Coordinator view)", () => {
     expect(assignmentHasScores(b, "pa-3-gomez")).toBe(true);
     expect(assignmentHasScores({ scores: [], scored_assignment_ids: [] }, "pa-3-gomez")).toBe(false);
     expect(sessionHasScores(state().bundles["sess-g7-proposal"])).toBe(false);
+  });
+});
+
+describe("groups & student privacy", () => {
+  it("parses optional emails in member lines", () => {
+    expect(parseMembers("Ana Cruz, 2022-1, ACruz@School.edu\nBen Ramos; 2022-2")).toEqual([
+      { student_name: "Ana Cruz", student_number: "2022-1", email: "acruz@school.edu" },
+      { student_name: "Ben Ramos", student_number: "2022-2", email: "" },
+    ]);
+  });
+
+  it("validates members", () => {
+    const ms = state().bundles["sess-g4-final"].members;
+    expect(memberProblems({ student_name: "New", student_number: "2022-9", email: "" }, ms)).toEqual([]);
+    expect(memberProblems({ student_name: "", student_number: "2022-00417", email: "x" }, ms))
+      .toEqual(["Student name is required.", "Another member already has this student number.", "Enter a valid email address."]);
+    expect(memberProblems({ student_name: "Andrea Lim", student_number: "2022-00417", email: "" }, ms, "m-g4-1")).toEqual([]);
+  });
+
+  it("locks membership once any defense of the group has scores", () => {
+    const s = state();
+    expect(groupScoringStarted(Object.values(s.bundles), "p-g4")).toBe(true);
+    expect(groupScoringStarted(Object.values(s.bundles), "p-g7")).toBe(false);
+  });
+
+  it("a student sees only their own grade; staff see everyone", () => {
+    const b = state().bundles["sess-g4-final"];
+    const andrea = resolveViewer(USERS.find((u) => u.id === "u-stud")!, b);
+    const own = gradeVisibleMembers(andrea, b);
+    expect(own.map((m) => m.student_name)).toEqual(["Andrea Lim"]);
+    const c = consolidate({ ...b, members: own }, undefined, { includeUnsubmitted: true });
+    expect(c.students).toHaveLength(1);
+    expect(c.stats.some((st) => st.student && st.student.id !== "m-g4-1")).toBe(false);
+    const adviser = resolveViewer(USERS.find((u) => u.id === "u-reyes")!, b);
+    expect(gradeVisibleMembers(adviser, b)).toHaveLength(3);
   });
 });

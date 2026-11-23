@@ -143,9 +143,9 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
               </NativeSelect>
             </div>
             <div className="space-y-1 sm:col-span-2">
-              <Label htmlFor="sf-members">Proponents — one per line: <span className="font-mono">Name, Student No.</span></Label>
+              <Label htmlFor="sf-members">Proponents — one per line: <span className="font-mono">Name, Student No., email</span> (email optional, for sign-in)</Label>
               <Textarea id="sf-members" rows={3} value={f.membersText} onChange={(e) => set("membersText", e.target.value)}
-                placeholder={"Ana Cruz, 2022-00811\nBen Ramos, 2022-00812"} className="font-mono text-xs" />
+                placeholder={"Ana Cruz, 2022-00811, acruz@school.edu\nBen Ramos, 2022-00812"} className="font-mono text-xs" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="sf-ms">Manuscript URL (PDF)</Label>

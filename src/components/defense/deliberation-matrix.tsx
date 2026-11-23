@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
+import { gradeVisibleMembers } from "@/lib/admin";
 import { consolidate } from "@/lib/grading";
 import { allSubmitted, canFinalize, canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
@@ -39,7 +40,9 @@ export function DeliberationMatrix({ bundle, viewer, userById, onFinalize }: {
 }
 
 function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof DeliberationMatrix>[0]) {
-  const c = consolidate(bundle);
+  // Students see only their own row (the database also withholds classmates' scores).
+  const ownOnly = gradeVisibleMembers(viewer, bundle).length < bundle.members.length;
+  const c = consolidate({ ...bundle, members: gradeVisibleMembers(viewer, bundle) });
   const [verdict, setVerdict] = React.useState<Verdict>(bundle.session.verdict ?? c.suggestedVerdict);
   const [confirm, setConfirm] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -132,7 +135,7 @@ function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof Deli
           </tbody>
         </table>
         <p className="border-t px-3 py-2 text-sm font-semibold">
-          CONSOLIDATED WEIGHTED SCORE: {c.overallRating.toFixed(2)} / {(bundle.criteria[0]?.max_score ?? 5).toFixed(1)} ({c.overallPercent.toFixed(2)}%)
+          {ownOnly ? "YOUR WEIGHTED SCORE" : "CONSOLIDATED WEIGHTED SCORE"}: {c.overallRating.toFixed(2)} / {(bundle.criteria[0]?.max_score ?? 5).toFixed(1)} ({c.overallPercent.toFixed(2)}%)
           <span className="font-normal text-muted-foreground"> · Suggested: {VERDICT_LABEL[c.suggestedVerdict]}</span>
         </p>
       </div>

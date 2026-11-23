@@ -132,12 +132,14 @@ export interface ScheduleInput {
 export async function createProject(
   sb: SupabaseClient,
   p: Omit<CapstoneProject, "id">,
-  members: Pick<ProjectMember, "student_name" | "student_number">[],
+  members: { student_name: string; student_number: string; email?: string }[],
 ) {
   const { data, error } = await sb.from("capstone_projects").insert(p).select().single<CapstoneProject>();
   if (error) throw error;
   if (members.length) {
-    const { error: e2 } = await sb.from("project_members").insert(members.map((m) => ({ ...m, project_id: data.id })));
+    const { error: e2 } = await sb.from("project_members").insert(members.map((m) => ({
+      student_name: m.student_name, student_number: m.student_number, email: m.email || null, project_id: data.id,
+    })));
     if (e2) throw e2;
   }
   return data;
@@ -272,4 +274,35 @@ export async function resetPassword(sb: SupabaseClient, id: string): Promise<str
 export async function setAccountActive(sb: SupabaseClient, id: string, active: boolean) {
   const { error } = await sb.rpc("admin_set_account_active", { p_user: id, p_active: active });
   if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Group members (proponents)
+// ---------------------------------------------------------------------------
+type MemberIn = import("../types").MemberInput;
+const memberRow = (m: MemberIn) => ({
+  student_name: m.student_name.trim(), student_number: m.student_number.trim(), email: m.email.trim().toLowerCase() || null,
+});
+
+export async function addMember(sb: SupabaseClient, projectId: string, m: MemberIn) {
+  const { error } = await sb.from("project_members").insert({ ...memberRow(m), project_id: projectId });
+  if (error) throw error;
+}
+
+export async function updateMember(sb: SupabaseClient, memberId: string, m: MemberIn) {
+  const { error } = await sb.from("project_members").update(memberRow(m)).eq("id", memberId);
+  if (error) throw error;
+}
+
+export async function removeMember(sb: SupabaseClient, memberId: string) {
+  const { error } = await sb.from("project_members").delete().eq("id", memberId);
+  if (error) throw error;
+}
+
+/** Creates (or links) the student's account; tempPassword is null when an existing account was linked. */
+export async function createMemberAccount(sb: SupabaseClient, memberId: string) {
+  const { data, error } = await sb.rpc("admin_create_member_account", { p_member: memberId });
+  if (error) throw error;
+  const row = (data as { user_id: string; temp_password: string | null; linked_existing: boolean }[])[0];
+  return { userId: row.user_id, tempPassword: row.temp_password, linkedExisting: row.linked_existing };
 }

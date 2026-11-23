@@ -7,11 +7,12 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, isRubricSyncable, saveStageRubric, sessionHasScores, validateSchedule,
+  activeRubric, blendFor, buildAttendance, groupScoringStarted, isRubricSyncable, memberProblems, saveStageRubric,
+  sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
 import { seedGrading } from "../mock-data";
-import { applyMinutes, applyScore, StoreContext, type State, type StoreCtx, type StoreOps } from "../store";
+import { applyMinutes, applyScore, StoreContext, type MemberAccountResult, type State, type StoreCtx, type StoreOps } from "../store";
 import type { DefenseMinutes, RubricScore, SessionBundle, User } from "../types";
 import { isPublicPath } from "../redirect";
 import { createClient } from "./client";
@@ -331,6 +332,51 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
     },
     resetPassword: (id) => repo.resetPassword(sb, id),
     setAccountActive: (id, active) => repo.setAccountActive(sb, id, active),
+
+    // ---- Group members -------------------------------------------------------
+    async addMember(projectId, input) {
+      const s = stateRef.current;
+      const bundles = Object.values(s.bundles);
+      const current = bundles.find((b) => b.project.id === projectId);
+      if (!current) throw new Error("Group not found.");
+      if (groupScoringStarted(bundles, projectId)) throw new Error("Group membership is locked once scoring has started.");
+      const problems = memberProblems(input, current.members);
+      if (problems.length) throw new Error(problems.join(" "));
+      await repo.addMember(sb, projectId, input);
+      await loadAll();
+    },
+    async updateMember(memberId, input) {
+      const b = Object.values(stateRef.current.bundles).find((x) => x.members.some((m) => m.id === memberId));
+      if (!b) throw new Error("Member not found.");
+      const problems = memberProblems(input, b.members, memberId);
+      if (problems.length) throw new Error(problems.join(" "));
+      await repo.updateMember(sb, memberId, input);
+      await loadAll();
+    },
+    async removeMember(memberId) {
+      const bundles = Object.values(stateRef.current.bundles);
+      const b = bundles.find((x) => x.members.some((m) => m.id === memberId));
+      if (!b) throw new Error("Member not found.");
+      if (groupScoringStarted(bundles, b.project.id)) throw new Error("Group membership is locked once scoring has started.");
+      await repo.removeMember(sb, memberId);
+      await loadAll();
+    },
+    async createMemberAccounts(projectId) {
+      const b = Object.values(stateRef.current.bundles).find((x) => x.project.id === projectId);
+      if (!b) throw new Error("Group not found.");
+      const results: MemberAccountResult[] = [];
+      for (const m of b.members.filter((x) => !x.user_id && x.email)) {
+        try {
+          const r = await repo.createMemberAccount(sb, m.id);
+          results.push({ memberId: m.id, name: m.student_name, email: m.email!, tempPassword: r.tempPassword, linkedExisting: r.linkedExisting });
+        } catch (e) {
+          results.push({ memberId: m.id, name: m.student_name, email: m.email!, tempPassword: null, linkedExisting: false, error: message(e) });
+        }
+      }
+      setUsers(await repo.listUsers(sb));
+      await loadAll();
+      return results;
+    },
   }), [sb, patch, saveScore, flushScores, saveMinutesNow, attempt, loadAll, users]);
 
   // Save pending edits if the tab is closed mid-pause.
