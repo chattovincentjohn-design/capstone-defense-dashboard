@@ -26,6 +26,13 @@ leaders must enter (signed-out visitors can only call `registration_form_info` a
 button that opens the schedule form already filled in; once scheduled, the students' sign-in accounts are
 created from the **Groups** tab as usual.
 
+## Faculty sign-up (`/signup`)
+
+Faculty create their own account on the public **/signup** page, choosing Panel Member, Defense Chair,
+Defense Secretary or Adviser and their own password, then are signed in. The Coordinator opens or closes
+sign-up and generates the faculty code in **Faculty Accounts** (separate from the group registration code).
+Coordinator and Super Admin roles can never be self-assigned (`faculty_signup` enforces this).
+
 ## Super Admin
 
 The **Super Admin** can do everything the Coordinator can, and is the only one who can create, promote,

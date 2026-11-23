@@ -72,6 +72,9 @@ export default function LoginPage() {
               <p className="text-xs text-muted-foreground">
                 Group leader? <Link href="/register" className="text-primary hover:underline">Register your capstone group</Link>
               </p>
+              <p className="text-xs text-muted-foreground">
+                Faculty without an account? <Link href="/signup" className="text-primary hover:underline">Create your faculty account</Link>
+              </p>
             </form>
           )}
         </CardContent>

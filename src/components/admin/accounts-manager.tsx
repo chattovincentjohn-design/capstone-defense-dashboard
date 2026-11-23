@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { accountChangeProblem, accountProblems, assignableRoles, canManageAccount, emailChangeProblem, isAdminRole } from "@/lib/admin";
 import { useStore } from "@/lib/store";
+import { AccessCodeCard } from "./access-code-card";
 import { ROLE_LABEL, type Account, type AccountInput, type UserRole } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 
@@ -67,6 +68,11 @@ export function AccountsManager() {
 
   return (
     <div className="space-y-4">
+      <AccessCodeCard
+        title="Faculty sign-up page"
+        description="Faculty create their own account here (Panel Member, Defense Chair, Defense Secretary or Adviser) and choose their own password. They need the code below. Coordinator accounts are still created only by the Super Admin."
+        path="/signup" prefix="FAC" audience="faculty"
+        load={ops.getFacultySignupSettings} save={ops.saveFacultySignupSettings} />
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{accounts.length} accounts{disabled ? ` · ${disabled} disabled` : ""}</p>
         <div className="flex flex-wrap items-center gap-2">

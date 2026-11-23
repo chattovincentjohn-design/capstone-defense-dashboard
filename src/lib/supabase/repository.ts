@@ -355,3 +355,31 @@ export async function changeEmail(sb: SupabaseClient, id: string, email: string)
   const { error } = await sb.rpc("admin_change_email", { p_user: id, p_email: email });
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Faculty self sign-up (see migrations/*_faculty_signup.sql)
+// ---------------------------------------------------------------------------
+export async function facultySignupInfo(sb: SupabaseClient, code: string): Promise<{ open: boolean; valid: boolean }> {
+  const { data, error } = await sb.rpc("faculty_signup_info", { p_code: code });
+  if (error) throw error;
+  return data as { open: boolean; valid: boolean };
+}
+
+export async function facultySignup(sb: SupabaseClient, code: string, f: import("../types").FacultySignupInput) {
+  const { error } = await sb.rpc("faculty_signup", {
+    p_code: code, p_full_name: f.full_name, p_email: f.email, p_password: f.password, p_role: f.role, p_department: f.department,
+  });
+  if (error) throw error;
+}
+
+export async function getFacultySignupSettings(sb: SupabaseClient): Promise<import("../types").AccessSettings> {
+  const { data, error } = await sb.from("registration_settings").select("faculty_open, faculty_code").eq("id", 1).single();
+  if (error) throw error;
+  return { is_open: data.faculty_open, access_code: data.faculty_code };
+}
+
+export async function saveFacultySignupSettings(sb: SupabaseClient, s: import("../types").AccessSettings) {
+  const { error } = await sb.from("registration_settings")
+    .update({ faculty_open: s.is_open, faculty_code: s.access_code.trim(), updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) throw error;
+}

@@ -9,7 +9,7 @@ import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
   Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
-  RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
+  FacultySignupInput, RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
 import { uid } from "./utils";
@@ -545,11 +545,11 @@ export const MAX_GROUP_MEMBERS = 10;
 /** Faculty a group may pick as its adviser (same list as the schedule form). */
 export const ADVISER_ROLES: User["role"][] = ["adviser", "chair", "panelist", "admin", "superadmin"];
 /** Random registration code, e.g. SCS-7KQ4-M2XP (no look-alike characters such as 0/O or 1/I). */
-export function generateRegistrationCode(): string {
+export function generateRegistrationCode(prefix = "SCS"): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const bytes = crypto.getRandomValues(new Uint8Array(8));
   const chars = Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
-  return `SCS-${chars.slice(0, 4)}-${chars.slice(4)}`;
+  return `${prefix}-${chars.slice(0, 4)}-${chars.slice(4)}`;
 }
 
 /** Registration codes ignore case and surrounding spaces. */
@@ -600,4 +600,22 @@ export function cleanRegistration(r: RegistrationInput): RegistrationInput {
     manuscript_url: r.manuscript_url.trim(), demo_url: r.demo_url.trim(), abstract: r.abstract.trim(),
     contact_email: r.contact_email.trim().toLowerCase(),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Faculty self sign-up
+// ---------------------------------------------------------------------------
+/** Roles faculty may choose for themselves (never Coordinator or Super Admin). */
+export const FACULTY_SIGNUP_ROLES: User["role"][] = ["panelist", "chair", "secretary", "adviser"];
+export const MIN_PASSWORD = 8;
+
+export function facultySignupProblems(f: FacultySignupInput, confirmPassword: string): string[] {
+  const p: string[] = [];
+  if (f.full_name.trim().length < 3) p.push("Enter your full name with title, e.g. Prof. Juan P. Santos.");
+  if (!EMAIL_RE.test(f.email.trim())) p.push("Enter a valid email address.");
+  if (!FACULTY_SIGNUP_ROLES.includes(f.role)) p.push("Choose your role.");
+  if (f.password.length < MIN_PASSWORD) p.push(`Password must be at least ${MIN_PASSWORD} characters.`);
+  else if (f.password.length > 72) p.push("Password must be at most 72 characters.");
+  else if (f.password !== confirmPassword) p.push("The two passwords do not match.");
+  return p;
 }

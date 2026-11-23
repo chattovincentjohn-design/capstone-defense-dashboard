@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  Account, AccountInput, DefenseMinutes, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
@@ -34,6 +34,7 @@ export interface State {
   /** Demo only: group self-registrations and their settings (live mode loads these on demand). */
   registrations: GroupRegistration[];
   registrationSettings: RegistrationSettings;
+  facultySignupSettings: AccessSettings;
   currentUserId: string;
   hydrated: boolean;
 }
@@ -85,6 +86,11 @@ export interface StoreOps {
   saveRegistrationSettings(settings: RegistrationSettings): Promise<void>;
   setRegistrationStatus(id: string, status: RegistrationStatus): Promise<void>;
   deleteRegistration(id: string): Promise<void>;
+  /** Public (signed-out) faculty sign-up; signs the new account in. */
+  facultySignupInfo(code: string): Promise<{ open: boolean; valid: boolean }>;
+  facultySignup(code: string, input: FacultySignupInput): Promise<void>;
+  getFacultySignupSettings(): Promise<AccessSettings>;
+  saveFacultySignupSettings(settings: AccessSettings): Promise<void>;
 }
 
 export interface StoreCtx {
@@ -141,6 +147,7 @@ function initial(): State {
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     registrations: [],
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
+    facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -204,6 +211,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
         accounts: state.accounts, registrations: state.registrations, registrationSettings: state.registrationSettings,
+        facultySignupSettings: state.facultySignupSettings,
         currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
@@ -440,6 +448,37 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       async deleteRegistration(id) {
         const s = stateRef.current;
         replaceAll({ ...s, registrations: s.registrations.filter((r) => r.id !== id) });
+      },
+
+      // ---- Faculty self sign-up (mirrors the database RPCs) -------------------
+      async facultySignupInfo(code) {
+        const f = stateRef.current.facultySignupSettings;
+        const open = f.is_open && !!f.access_code;
+        return { open, valid: open && codeMatches(code, f.access_code) };
+      },
+      async facultySignup(code, input) {
+        const s = stateRef.current;
+        const f = s.facultySignupSettings;
+        if (!f.is_open || !f.access_code) throw new Error("Faculty sign-up is closed.");
+        if (!codeMatches(code, f.access_code)) throw new Error("The faculty sign-up code is incorrect.");
+        const problems = facultySignupProblems(input, input.password);
+        if (problems.length) throw new Error(problems.join(" "));
+        const email = input.email.trim().toLowerCase();
+        if (s.accounts.some((a) => a.email.toLowerCase() === email)) {
+          throw new Error('An account with this email already exists. Use "Forgot password" on the sign-in page.');
+        }
+        const account: Account = {
+          id: uid("u"), email, full_name: input.full_name.trim(), role: input.role, department: input.department.trim() || null,
+          is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+        };
+        replaceAll({ ...s, accounts: [...s.accounts, account], currentUserId: account.id });
+      },
+      async getFacultySignupSettings() {
+        return stateRef.current.facultySignupSettings;
+      },
+      async saveFacultySignupSettings(settings) {
+        if (settings.is_open && settings.access_code.trim().length < 4) throw new Error("Set a sign-up code of at least 4 characters before opening sign-up.");
+        replaceAll({ ...stateRef.current, facultySignupSettings: { is_open: settings.is_open, access_code: settings.access_code.trim() } });
       },
     };
   }, []);

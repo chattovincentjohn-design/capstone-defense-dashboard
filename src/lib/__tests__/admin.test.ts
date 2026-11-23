@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, emailChangeProblem, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, emailChangeProblem, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -19,6 +19,7 @@ function state(): State {
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     registrations: [],
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
+    facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
     currentUserId: "u-admin",
     hydrated: true,
   };
@@ -374,5 +375,22 @@ describe("changing a sign-in email", () => {
   it("rejects invalid and taken emails", () => {
     expect(emailChangeProblem("not-an-email", "a", accounts)).toMatch(/valid email/);
     expect(emailChangeProblem("Two@jhcsc.edu.ph", "a", accounts)).toMatch(/already uses/);
+  });
+});
+
+describe("faculty self sign-up", () => {
+  const ok = { full_name: "Prof. Juan P. Santos", email: "jsantos@jhcsc.edu.ph", password: "longenough", role: "panelist" as const, department: "" };
+  it("accepts a complete sign-up", () => {
+    expect(facultySignupProblems(ok, "longenough")).toEqual([]);
+  });
+  it("rejects short or mismatched passwords and bad details", () => {
+    expect(facultySignupProblems({ ...ok, password: "short" }, "short").join(" ")).toMatch(/at least 8/);
+    expect(facultySignupProblems(ok, "different").join(" ")).toMatch(/do not match/);
+    expect(facultySignupProblems({ ...ok, email: "x" }, "longenough").join(" ")).toMatch(/valid email/);
+    expect(facultySignupProblems({ ...ok, full_name: "J" }, "longenough").join(" ")).toMatch(/full name/);
+  });
+  it("never allows Coordinator or Super Admin", () => {
+    expect(facultySignupProblems({ ...ok, role: "admin" }, "longenough")).toContain("Choose your role.");
+    expect(facultySignupProblems({ ...ok, role: "superadmin" }, "longenough")).toContain("Choose your role.");
   });
 });

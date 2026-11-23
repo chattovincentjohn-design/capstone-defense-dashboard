@@ -243,3 +243,20 @@ export interface RegistrationFormInfo {
   valid: boolean;
   advisers: { id: string; full_name: string }[];
 }
+
+// ---------------------------------------------------------------------------
+// Faculty self sign-up (public /signup page)
+// ---------------------------------------------------------------------------
+export interface FacultySignupInput {
+  full_name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  department: string;
+}
+
+/** On/off switch plus the code people must enter (group registration and faculty sign-up each have one). */
+export interface AccessSettings {
+  is_open: boolean;
+  access_code: string;
+}
