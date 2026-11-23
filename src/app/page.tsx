@@ -26,7 +26,7 @@ export default function Home() {
         <div className="flex items-center gap-3">
           <BrandLogo size={56} />
           <div>
-          <h1 className="text-xl font-bold uppercase tracking-wider text-primary">Capstone Defense Panel Dashboard</h1>
+          <h1 className="text-xl font-bold uppercase tracking-wider">Capstone Defense Panel Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             {mode === "demo" ? "Demo mode · data persists in this browser. Switch identity to test each role." : "Live · changes are shared with the whole panel in real time."}
           </p>

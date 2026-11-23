@@ -9,11 +9,3 @@ export function BrandLogo({ size = 40, className }: { size?: number; className?:
   );
 }
 
-/** Maroon strip that carries the school identity across every screen. */
-export function BrandStrip() {
-  return (
-    <div className="no-print bg-primary px-4 py-1 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-primary-foreground">
-      JHCSC · School of Computing Studies
-    </div>
-  );
-}

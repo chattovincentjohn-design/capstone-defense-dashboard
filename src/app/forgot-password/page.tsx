@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
       <Button asChild variant="ghost" size="sm"><Link href="/login"><ArrowLeft /> Back to sign in</Link></Button>
       <div className="mb-4 flex flex-col items-center gap-2 text-center">
         <BrandLogo size={96} />
-        <p className="text-xs font-semibold uppercase tracking-widest text-brand-gray">JHCSC · School of Computing Studies</p>
+        <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">JHCSC · School of Computing Studies</p>
       </div>
       <Card>
         <CardHeader><CardTitle>Reset your password</CardTitle></CardHeader>

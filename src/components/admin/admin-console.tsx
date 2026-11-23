@@ -25,7 +25,7 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
           <Button asChild size="icon" variant="ghost" aria-label="Back to dashboard"><Link href="/"><ArrowLeft /></Link></Button>
           <BrandLogo size={40} />
           <div>
-            <h1 className="text-base font-bold uppercase tracking-wider text-primary sm:text-lg">{currentUser.role === "superadmin" ? "Super Admin Console" : "Coordinator Console"}</h1>
+            <h1 className="text-base font-bold uppercase tracking-wider sm:text-lg">{currentUser.role === "superadmin" ? "Super Admin Console" : "Coordinator Console"}</h1>
             <p className="text-xs text-muted-foreground">Defense scheduling · Groups · Rubric configuration · Accounts</p>
           </div>
         </div>
