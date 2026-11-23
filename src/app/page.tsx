@@ -46,7 +46,7 @@ export default function Home() {
           {state.hydrated && mine.length === 0 && <p className="text-sm text-muted-foreground">No defense sessions assigned to {currentUser.full_name}.</p>}
           {mine.map((b) => (
             <Link key={b.session.id} href={`/defense/${b.session.id}`}
-              className="block rounded-md border bg-background/40 p-4 transition-colors hover:border-primary">
+              className="block rounded-md border bg-background/40 p-4 text-foreground transition-colors hover:border-primary">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{STAGE_LABEL[b.session.stage]}</Badge>
                 <span className="font-semibold">{b.project.group_label}: {b.project.title}</span>
