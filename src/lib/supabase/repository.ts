@@ -30,15 +30,18 @@ export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string):
     members: (members.data ?? []) as ProjectMember[],
     assignments: (assignments.data ?? []) as PanelAssignment[],
     criteria: (criteria.data ?? [])
+      .filter((row) => (row as unknown as { rubric_criteria: RubricCriterion | null }).rubric_criteria)
       .map((row) => (row as unknown as { rubric_criteria: RubricCriterion }).rubric_criteria)
       .map((c) => ({ ...c, weight_percentage: Number(c.weight_percentage), max_score: Number(c.max_score) }))
       .sort((a, b) => a.sort_order - b.sort_order),
     scores: (scores.data ?? []).map((s) => ({ ...s, score: Number(s.score) })) as RubricScore[],
     comments: (comments.data ?? []) as PanelComment[],
-    minutes: (minutes.data ?? {
-      id: "", session_id: sessionId, recorder_id: session.secretary_id ?? "", started_at: null, ended_at: null,
-      attendance_json: [], qa_entries_json: [], deliberation_notes: "", chair_approved_at: null,
-    }) as DefenseMinutes,
+    minutes: minutes.data
+      ? { ...minutes.data, deliberation_notes: minutes.data.deliberation_notes ?? "" }
+      : {
+          id: "", session_id: sessionId, recorder_id: session.secretary_id ?? "", started_at: null, ended_at: null,
+          attendance_json: [], qa_entries_json: [], deliberation_notes: "", chair_approved_at: null,
+        },
   };
 }
 
@@ -76,11 +79,38 @@ export async function resolveRevision(sb: SupabaseClient, id: string, resolved: 
   return data as PanelComment;
 }
 
-export async function saveMinutes(sb: SupabaseClient, m: DefenseMinutes) {
+/** Update the minutes row, or create it the first time. Returns the row id. */
+export async function saveMinutes(sb: SupabaseClient, m: DefenseMinutes): Promise<string> {
   const { id, ...rest } = m;
-  const q = id ? sb.from("defense_minutes").update(rest).eq("id", id) : sb.from("defense_minutes").insert(rest);
-  const { error } = await q;
+  if (id) {
+    const { error } = await sb.from("defense_minutes").update({ ...rest, updated_at: new Date().toISOString() }).eq("id", id);
+    if (error) throw error;
+    return id;
+  }
+  const { data, error } = await sb.from("defense_minutes").insert(rest).select("id").single();
   if (error) throw error;
+  return data.id as string;
+}
+
+// ---------------------------------------------------------------------------
+// Bulk loads for the signed-in user (RLS decides what comes back)
+// ---------------------------------------------------------------------------
+export async function listUsers(sb: SupabaseClient) {
+  const { data, error } = await sb.from("users").select("id, full_name, email, role, department").order("full_name");
+  if (error) throw error;
+  return data as import("../types").User[];
+}
+
+export async function listAllCriteria(sb: SupabaseClient) {
+  const { data, error } = await sb.from("rubric_criteria").select("*").order("sort_order");
+  if (error) throw error;
+  return (data ?? []).map((c) => ({ ...c, weight_percentage: Number(c.weight_percentage), max_score: Number(c.max_score) })) as RubricCriterion[];
+}
+
+export async function listVisibleSessionIds(sb: SupabaseClient) {
+  const { data, error } = await sb.from("defense_sessions").select("id").order("scheduled_at");
+  if (error) throw error;
+  return (data ?? []).map((r) => r.id as string);
 }
 
 // ---------------------------------------------------------------------------

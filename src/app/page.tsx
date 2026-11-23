@@ -10,7 +10,7 @@ import { STAGE_LABEL, VERDICT_LABEL } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 
 export default function Home() {
-  const { state, reset, currentUser } = useStore();
+  const { mode, state, reset, currentUser } = useStore();
   const sessions = state.order.map((id) => state.bundles[id]);
   const mine = sessions.filter((b) =>
     currentUser.role === "admin" ||
@@ -24,7 +24,9 @@ export default function Home() {
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold uppercase tracking-wider">Capstone Defense Panel Dashboard</h1>
-          <p className="text-sm text-muted-foreground">Demo mode · data persists in this browser. Switch identity to test each role.</p>
+          <p className="text-sm text-muted-foreground">
+            {mode === "demo" ? "Demo mode · data persists in this browser. Switch identity to test each role." : "Live · changes are shared with the whole panel in real time."}
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {currentUser.role === "admin" && (
@@ -37,10 +39,11 @@ export default function Home() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><CalendarClock className="size-4" /> Defense Schedule</CardTitle>
-          <Button size="sm" variant="ghost" onClick={reset}><RotateCcw /> Reset demo data</Button>
+          {mode === "demo" && <Button size="sm" variant="ghost" onClick={reset}><RotateCcw /> Reset demo data</Button>}
         </CardHeader>
         <CardContent className="space-y-3">
-          {mine.length === 0 && <p className="text-sm text-muted-foreground">No defense sessions assigned to {currentUser.full_name}.</p>}
+          {!state.hydrated && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {state.hydrated && mine.length === 0 && <p className="text-sm text-muted-foreground">No defense sessions assigned to {currentUser.full_name}.</p>}
           {mine.map((b) => (
             <Link key={b.session.id} href={`/defense/${b.session.id}`}
               className="block rounded-md border bg-background/40 p-4 transition-colors hover:border-primary">

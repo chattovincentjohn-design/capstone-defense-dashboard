@@ -341,7 +341,7 @@ begin
   update public.panel_assignments
      set has_submitted = true,
          submitted_at = v_now,
-         signature_hash = encode(digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
+         signature_hash = encode(extensions.digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
                                  'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') || '|' || v_payload, 'sha256'), 'hex')
    where id = a.id
   returning * into a;
@@ -368,7 +368,7 @@ begin
 
   update public.defense_sessions
      set verdict = p_verdict, is_locked = true, locked_at = v_now,
-         chair_signature_hash = encode(digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
+         chair_signature_hash = encode(extensions.digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
                                 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') || '|' || p_verdict::text || '|' || v_payload, 'sha256'), 'hex')
    where id = p_session and not is_locked
   returning * into s;
@@ -490,6 +490,9 @@ create policy minutes_insert on public.defense_minutes for insert to authenticat
 create policy minutes_update on public.defense_minutes for update to authenticated
   using (public.is_secretary(session_id) and chair_approved_at is null)
   with check (public.is_secretary(session_id));
+-- Coordinator creates the minutes row when scheduling (and fixes recorder/attendance before start)
+create policy minutes_admin on public.defense_minutes for all to authenticated
+  using (public.is_admin()) with check (public.is_admin());
 
 -- RPC grants
 revoke all on function public.submit_evaluation(uuid) from public, anon;

@@ -1,14 +1,22 @@
 "use client";
 /**
- * Demo data store. Persists to localStorage and syncs across browser tabs via the
- * `storage` event — open the workspace in two tabs as two different panelists to
- * see live status updates (the production equivalent is lib/supabase/realtime.ts).
+ * App data store with two interchangeable backends behind one interface:
+ *  - Demo (no env vars): in-browser state persisted to localStorage, synced across
+ *    tabs via the `storage` event, with a role switcher to impersonate the cast.
+ *  - Supabase (NEXT_PUBLIC_SUPABASE_* set): see lib/supabase/store.tsx.
+ * Screens only use `useStore()` / `useDefenseSession()` and the async `ops`.
  */
 import * as React from "react";
+import {
+  deleteScheduledSession, saveStageRubric, scheduleSession, updateScheduledSession,
+  type RubricSaveReport, type ScheduleDraft,
+} from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
-import type { DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict } from "./types";
+import type {
+  DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
+} from "./types";
 import { uid } from "./utils";
 
 const STORAGE_KEY = "cdms-demo-state-v1";
@@ -24,6 +32,61 @@ export interface State {
   hydrated: boolean;
 }
 
+export type NewComment = Pick<PanelComment, "panel_assignment_id" | "category" | "severity" | "comment_text">;
+
+/** Every write the UI can make. Workspace ops report failures via `error`; admin ops throw. */
+export interface StoreOps {
+  setScore(sessionId: string, assignmentId: string, criterionId: string, studentId: string | null, score: number): void;
+  submitEvaluation(sessionId: string, assignmentId: string): Promise<void>;
+  finalize(sessionId: string, verdict: Verdict): Promise<void>;
+  addComment(sessionId: string, c: NewComment): Promise<void>;
+  deleteComment(sessionId: string, commentId: string): Promise<void>;
+  resolveRevision(sessionId: string, commentId: string, resolved: boolean, note: string, reference: string): Promise<void>;
+  updateMinutes(sessionId: string, fn: (m: DefenseMinutes) => DefenseMinutes): void;
+  schedule(draft: ScheduleDraft): Promise<string>;
+  updateSchedule(draft: ScheduleDraft): Promise<string>;
+  deleteSession(sessionId: string): Promise<string>;
+  saveRubric(stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend): Promise<RubricSaveReport>;
+}
+
+export interface StoreCtx {
+  mode: "demo" | "supabase";
+  state: State;
+  users: User[];
+  currentUser: User;
+  ops: StoreOps;
+  /** Last failed write, shown as a toast. */
+  error: string | null;
+  clearError: () => void;
+  /** Demo only. */
+  setUser: (id: string) => void;
+  reset: () => void;
+  /** Supabase only. */
+  signOut: () => Promise<void>;
+}
+
+export const StoreContext = React.createContext<StoreCtx | null>(null);
+
+// ---------------------------------------------------------------------------
+// Shared pure transforms (used by both backends for optimistic updates)
+// ---------------------------------------------------------------------------
+export function applyScore(b: SessionBundle, assignmentId: string, criterionId: string, studentId: string | null, score: number): SessionBundle {
+  const a = b.assignments.find((x) => x.id === assignmentId);
+  if (!a || a.has_submitted || b.session.is_locked) return b;
+  const idx = b.scores.findIndex((s) => s.panel_assignment_id === assignmentId && s.criterion_id === criterionId && s.student_id === studentId);
+  const scores = [...b.scores];
+  if (idx >= 0) scores[idx] = { ...scores[idx], score };
+  else scores.push({ id: uid("s"), session_id: b.session.id, panel_assignment_id: assignmentId, criterion_id: criterionId, student_id: studentId, score });
+  return { ...b, scores };
+}
+
+export function applyMinutes(b: SessionBundle, fn: (m: DefenseMinutes) => DefenseMinutes): SessionBundle {
+  return b.session.is_locked || b.minutes.chair_approved_at ? b : { ...b, minutes: fn(b.minutes) };
+}
+
+// ---------------------------------------------------------------------------
+// Demo backend
+// ---------------------------------------------------------------------------
 type Action =
   | { type: "replace"; state: Omit<State, "hydrated"> }
   | { type: "setUser"; userId: string }
@@ -73,40 +136,30 @@ async function backfillSignatures(s: State): Promise<State> {
   return { ...s, bundles };
 }
 
-interface StoreCtx {
-  state: State;
-  users: User[];
-  currentUser: User;
-  setUser: (id: string) => void;
-  patch: (sessionId: string, fn: (b: SessionBundle) => SessionBundle) => void;
-  patchState: (fn: (s: State) => State) => void;
-  reset: () => void;
-}
-
-const Ctx = React.createContext<StoreCtx | null>(null);
-
 export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = React.useReducer(reducer, undefined, initial);
+  const [error, setError] = React.useState<string | null>(null);
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
 
-  // Hydrate from localStorage once on mount.
   React.useEffect(() => {
     let base: State = initial();
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) base = { ...initial(), ...JSON.parse(raw), hydrated: false }; // older saves lack `rubric`
+      if (raw) base = { ...initial(), ...JSON.parse(raw), hydrated: false }; // older saves lack newer keys
     } catch { /* storage unavailable → seed */ }
     backfillSignatures(base).then((s) => dispatch({ type: "replace", state: s }));
   }, []);
 
-  // Persist after hydration.
   React.useEffect(() => {
     if (!state.hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading, currentUserId: state.currentUserId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading, currentUserId: state.currentUserId,
+      }));
     } catch { /* ignore */ }
   }, [state]);
 
-  // Cross-tab "realtime" sync. Keep this tab's selected user.
   React.useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key !== STORAGE_KEY || !e.newValue) return;
@@ -118,110 +171,123 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, []);
-  const stateRef = React.useRef(state);
-  stateRef.current = state;
+
+  const ops = React.useMemo<StoreOps>(() => {
+    const patch = (sessionId: string, fn: (b: SessionBundle) => SessionBundle) => dispatch({ type: "patchBundle", sessionId, fn });
+    const replaceAll = (next: State) => dispatch({ type: "patchState", fn: () => next });
+    return {
+      setScore: (sessionId, assignmentId, criterionId, studentId, score) =>
+        patch(sessionId, (b) => applyScore(b, assignmentId, criterionId, studentId, score)),
+      async submitEvaluation(sessionId, assignmentId) {
+        const b = stateRef.current.bundles[sessionId];
+        const a = b?.assignments.find((x) => x.id === assignmentId);
+        if (!a || a.has_submitted) return;
+        const ts = new Date().toISOString();
+        const hash = await signEvaluation(a.faculty_id, ts, b.scores.filter((s) => s.panel_assignment_id === assignmentId));
+        patch(sessionId, (bb) => ({
+          ...bb,
+          assignments: bb.assignments.map((x) => (x.id === assignmentId ? { ...x, has_submitted: true, submitted_at: ts, signature_hash: hash } : x)),
+        }));
+      },
+      async finalize(sessionId, verdict) {
+        const b = stateRef.current.bundles[sessionId];
+        const chair = b?.assignments.find((a) => a.panel_role === "chair");
+        if (!chair || b.session.is_locked || !b.assignments.every((a) => a.has_submitted)) return;
+        const ts = new Date().toISOString();
+        const hashes = [...b.assignments].sort((x, y) => x.id.localeCompare(y.id)).map((a) => a.signature_hash ?? "");
+        const hash = await signFinalization(chair.faculty_id, ts, verdict, hashes);
+        patch(sessionId, (bb) => ({
+          ...bb,
+          session: { ...bb.session, verdict, is_locked: true, locked_at: ts, chair_signature_hash: hash },
+          minutes: { ...bb.minutes, chair_approved_at: ts, ended_at: bb.minutes.ended_at ?? ts },
+        }));
+      },
+      async addComment(sessionId, c) {
+        patch(sessionId, (b) => b.session.is_locked ? b : ({
+          ...b,
+          comments: [...b.comments, {
+            ...c, id: uid("cm"), session_id: sessionId, is_resolved: false, resolution_note: null,
+            resolution_reference: null, resolved_at: null, created_at: new Date().toISOString(),
+          }],
+        }));
+      },
+      async deleteComment(sessionId, commentId) {
+        patch(sessionId, (b) => b.session.is_locked ? b : ({ ...b, comments: b.comments.filter((c) => c.id !== commentId) }));
+      },
+      async resolveRevision(sessionId, commentId, resolved, note, reference) {
+        patch(sessionId, (b) => ({
+          ...b,
+          comments: b.comments.map((c) => c.id === commentId ? {
+            ...c, is_resolved: resolved, resolution_note: note || null, resolution_reference: reference || null,
+            resolved_at: resolved ? new Date().toISOString() : null,
+          } : c),
+        }));
+      },
+      updateMinutes: (sessionId, fn) => patch(sessionId, (b) => applyMinutes(b, fn)),
+      async schedule(draft) {
+        replaceAll(scheduleSession(stateRef.current, draft, USERS).state);
+        return "Defense scheduled. The panel can now open it from their dashboard.";
+      },
+      async updateSchedule(draft) {
+        replaceAll(updateScheduledSession(stateRef.current, draft, USERS));
+        return "Session updated.";
+      },
+      async deleteSession(sessionId) {
+        replaceAll(deleteScheduledSession(stateRef.current, sessionId));
+        return "Session removed from the schedule.";
+      },
+      async saveRubric(stage, drafts, blend) {
+        const { state: next, report } = saveStageRubric(stateRef.current, stage, drafts, blend);
+        replaceAll(next);
+        return report;
+      },
+    };
+  }, []);
 
   const value = React.useMemo<StoreCtx>(() => ({
+    mode: "demo",
     state,
     users: USERS,
     currentUser: USERS.find((u) => u.id === state.currentUserId) ?? USERS[0],
+    ops,
+    error,
+    clearError: () => setError(null),
     setUser: (userId) => dispatch({ type: "setUser", userId }),
-    patch: (sessionId, fn) => dispatch({ type: "patchBundle", sessionId, fn }),
-    patchState: (fn) => dispatch({ type: "patchState", fn }),
     reset: () => {
       try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
-      backfillSignatures(initial()).then((s) => dispatch({ type: "replace", state: { ...s, currentUserId: state.currentUserId } }));
+      backfillSignatures(initial()).then((s) => dispatch({ type: "replace", state: { ...s, currentUserId: stateRef.current.currentUserId } }));
     },
-  }), [state]);
+    signOut: async () => {},
+  }), [state, ops, error]);
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
 }
 
 export function useStore() {
-  const ctx = React.useContext(Ctx);
-  if (!ctx) throw new Error("useStore must be used inside <DemoStoreProvider>");
+  const ctx = React.useContext(StoreContext);
+  if (!ctx) throw new Error("useStore must be used inside a store provider");
   return ctx;
 }
 
-/** Session-scoped data + mutations. Each mutation mirrors a Supabase call (see lib/supabase/repository.ts). */
+/** Session-scoped data + mutations for the workspace and print views. */
 export function useDefenseSession(sessionId: string) {
-  const { state, patch, currentUser, users } = useStore();
+  const { state, ops, currentUser, users } = useStore();
   const bundle = state.bundles[sessionId];
   const viewer: Viewer | null = bundle ? resolveViewer(currentUser, bundle) : null;
   const userById = React.useCallback((id: string | null | undefined) => users.find((u) => u.id === id), [users]);
 
   const actions = React.useMemo(() => ({
-    /** upsert into rubric_scores */
-    setScore(assignmentId: string, criterionId: string, studentId: string | null, score: number) {
-      patch(sessionId, (b) => {
-        const a = b.assignments.find((x) => x.id === assignmentId);
-        if (!a || a.has_submitted || b.session.is_locked) return b;
-        const idx = b.scores.findIndex((s) => s.panel_assignment_id === assignmentId && s.criterion_id === criterionId && s.student_id === studentId);
-        const scores = [...b.scores];
-        if (idx >= 0) scores[idx] = { ...scores[idx], score };
-        else scores.push({ id: uid("s"), session_id: sessionId, panel_assignment_id: assignmentId, criterion_id: criterionId, student_id: studentId, score });
-        return { ...b, scores };
-      });
+    setScore: (assignmentId: string, criterionId: string, studentId: string | null, score: number) =>
+      ops.setScore(sessionId, assignmentId, criterionId, studentId, score),
+    submitEvaluation: (assignmentId: string) => ops.submitEvaluation(sessionId, assignmentId),
+    finalize: (verdict: Verdict) => ops.finalize(sessionId, verdict),
+    addComment: (c: NewComment) => { void ops.addComment(sessionId, c); },
+    deleteComment: (commentId: string) => { void ops.deleteComment(sessionId, commentId); },
+    resolveRevision: (commentId: string, resolved: boolean, note: string, reference: string) => {
+      void ops.resolveRevision(sessionId, commentId, resolved, note, reference);
     },
-
-    /** rpc('submit_evaluation') */
-    async submitEvaluation(assignmentId: string) {
-      const b = state.bundles[sessionId];
-      const a = b.assignments.find((x) => x.id === assignmentId);
-      if (!a || a.has_submitted) return;
-      const ts = new Date().toISOString();
-      const hash = await signEvaluation(a.faculty_id, ts, b.scores.filter((s) => s.panel_assignment_id === assignmentId));
-      patch(sessionId, (bb) => ({
-        ...bb,
-        assignments: bb.assignments.map((x) => (x.id === assignmentId ? { ...x, has_submitted: true, submitted_at: ts, signature_hash: hash } : x)),
-      }));
-    },
-
-    /** rpc('finalize_defense') */
-    async finalize(verdict: Verdict) {
-      const b = state.bundles[sessionId];
-      const chair = b.assignments.find((a) => a.panel_role === "chair");
-      if (!chair || b.session.is_locked || !b.assignments.every((a) => a.has_submitted)) return;
-      const ts = new Date().toISOString();
-      const hashes = [...b.assignments].sort((x, y) => x.id.localeCompare(y.id)).map((a) => a.signature_hash ?? "");
-      const hash = await signFinalization(chair.faculty_id, ts, verdict, hashes);
-      patch(sessionId, (bb) => ({
-        ...bb,
-        session: { ...bb.session, verdict, is_locked: true, locked_at: ts, chair_signature_hash: hash },
-        minutes: { ...bb.minutes, chair_approved_at: ts, ended_at: bb.minutes.ended_at ?? ts },
-      }));
-    },
-
-    addComment(c: Omit<PanelComment, "id" | "session_id" | "is_resolved" | "resolution_note" | "resolution_reference" | "resolved_at" | "created_at">) {
-      patch(sessionId, (b) => b.session.is_locked ? b : ({
-        ...b,
-        comments: [...b.comments, {
-          ...c, id: uid("cm"), session_id: sessionId, is_resolved: false, resolution_note: null,
-          resolution_reference: null, resolved_at: null, created_at: new Date().toISOString(),
-        }],
-      }));
-    },
-
-    deleteComment(commentId: string) {
-      patch(sessionId, (b) => b.session.is_locked ? b : ({ ...b, comments: b.comments.filter((c) => c.id !== commentId) }));
-    },
-
-    /** rpc('resolve_revision') */
-    resolveRevision(commentId: string, resolved: boolean, note: string, reference: string) {
-      patch(sessionId, (b) => ({
-        ...b,
-        comments: b.comments.map((c) => c.id === commentId ? {
-          ...c, is_resolved: resolved, resolution_note: note || null, resolution_reference: reference || null,
-          resolved_at: resolved ? new Date().toISOString() : null,
-        } : c),
-      }));
-    },
-
-    /** update defense_minutes */
-    updateMinutes(fn: (m: DefenseMinutes) => DefenseMinutes) {
-      patch(sessionId, (b) => (b.session.is_locked || b.minutes.chair_approved_at ? b : { ...b, minutes: fn(b.minutes) }));
-    },
-  }), [patch, sessionId, state.bundles]);
+    updateMinutes: (fn: (m: DefenseMinutes) => DefenseMinutes) => ops.updateMinutes(sessionId, fn),
+  }), [ops, sessionId]);
 
   return { bundle, viewer, actions, userById, hydrated: state.hydrated, order: state.order };
 }

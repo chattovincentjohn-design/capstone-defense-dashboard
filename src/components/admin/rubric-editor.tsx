@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import {
-  activeRubric, blendFor, blendProblems, isRubricSyncable, rubricProblems, saveStageRubric, sessionUsesBlend, weightTotals,
+  activeRubric, blendFor, blendProblems, isRubricSyncable, rubricProblems, sessionUsesBlend, weightTotals,
   type RubricSaveReport,
 } from "@/lib/admin";
 import { useStore } from "@/lib/store";
@@ -49,7 +49,9 @@ export function RubricEditor() {
 }
 
 function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boolean) => void }) {
-  const { state, patchState } = useStore();
+  const { state, ops } = useStore();
+  const [saving, setSaving] = React.useState(false);
+  const resync = React.useRef(false);
   const saved = React.useMemo(() => activeRubric(state.rubric, stage), [state.rubric, stage]);
   const [drafts, setDrafts] = React.useState<RubricCriterion[]>(saved);
   const [report, setReport] = React.useState<RubricSaveReport | null>(null);
@@ -109,16 +111,26 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
     }));
   };
 
-  const save = () => {
+  // After a save, reload drafts from the store: versioned/new criteria get new ids.
+  React.useEffect(() => {
+    if (!resync.current) return;
+    resync.current = false;
+    setDrafts(saved);
+    setBlend(savedBlend);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saved, savedBlend.groupWeight, savedBlend.individualWeight]);
+
+  const save = async () => {
+    setSaving(true);
     try {
-      const { state: next, report: r } = saveStageRubric(state, stage, drafts, blend);
-      patchState(() => next);
-      setDrafts(activeRubric(next.rubric, stage)); // versioned/new criteria get new ids
-      setBlend(blendFor(next, stage));
+      const r = await ops.saveRubric(stage, drafts, blend);
+      resync.current = true;
       setReport(r);
       setError(null);
     } catch (e) {
-      setError((e as Error).message);
+      setError(e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -247,7 +259,7 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
           )}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" size="sm" disabled={!dirty} onClick={() => { setDrafts(saved); setBlend(savedBlend); setError(null); }}><RotateCcw /> Discard</Button>
-            <Button size="sm" disabled={!dirty || problems.length > 0} onClick={save}><Save /> Save {STAGE_LABEL[stage]} rubric</Button>
+            <Button size="sm" disabled={saving || !dirty || problems.length > 0} onClick={() => void save()}><Save /> Save {STAGE_LABEL[stage]} rubric</Button>
           </div>
         </CardContent>
       </Card>

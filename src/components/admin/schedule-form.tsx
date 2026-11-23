@@ -50,11 +50,12 @@ function initialForm(editing: SessionBundle | undefined, projects: ReturnType<ty
   };
 }
 
-export function ScheduleForm({ state, users, editing, onSubmit, onCancel }: {
+export function ScheduleForm({ state, users, editing, busy = false, onSubmit, onCancel }: {
   state: State;
   users: User[];
   editing?: SessionBundle;
-  onSubmit: (d: ScheduleDraft) => string | null; // returns error message or null
+  busy?: boolean;
+  onSubmit: (d: ScheduleDraft) => Promise<string | null>; // resolves to an error message or null
   onCancel: () => void;
 }) {
   const projects = React.useMemo(() => listProjects(state), [state]);
@@ -92,7 +93,7 @@ export function ScheduleForm({ state, users, editing, onSubmit, onCancel }: {
     e.preventDefault();
     setAttempted(true);
     if (errors.length) return;
-    setSubmitError(onSubmit(draft));
+    void onSubmit(draft).then(setSubmitError);
   };
 
   const facultyOption = (u: User) => (
@@ -241,7 +242,7 @@ export function ScheduleForm({ state, users, editing, onSubmit, onCancel }: {
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="ghost" onClick={onCancel}><X /> Cancel</Button>
-        <Button type="submit" disabled={attempted && errors.length > 0}>
+        <Button type="submit" disabled={busy || (attempted && errors.length > 0)}>
           {editing ? <><Save /> Save changes</> : <><CalendarPlus /> Schedule defense</>}
         </Button>
       </div>

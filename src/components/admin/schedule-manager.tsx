@@ -5,9 +5,7 @@ import { CalendarPlus, Download, ExternalLink, Lock, Pencil, Trash2 } from "luci
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  deleteScheduledSession, gradesCsv, scheduleSession, updateScheduledSession, type ScheduleDraft,
-} from "@/lib/admin";
+import { gradesCsv, type ScheduleDraft } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle } from "@/lib/types";
 import { TIME_ZONE } from "@/lib/utils";
@@ -17,7 +15,9 @@ const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-PH", { week
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
 
 export function ScheduleManager() {
-  const { state, users, patchState } = useStore();
+  const { state, users, ops } = useStore();
+  const [busy, setBusy] = React.useState(false);
+  const [failure, setFailure] = React.useState<string | null>(null);
   const [mode, setMode] = React.useState<{ kind: "closed" } | { kind: "new" } | { kind: "edit"; id: string }>({ kind: "closed" });
   const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -36,27 +36,24 @@ export function ScheduleManager() {
     requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
   };
 
-  /** Applies a state transform; returns an error message for the form or null on success. */
-  const run = (fn: () => string): string | null => {
+  /** Runs a coordinator operation; returns an error message for the form or null on success. */
+  const run = async (fn: () => Promise<string>): Promise<string | null> => {
+    setBusy(true);
+    setFailure(null);
     try {
-      setNotice(fn());
+      setNotice(await fn());
       setMode({ kind: "closed" });
       return null;
     } catch (e) {
-      return (e as Error).message;
+      const msg = e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e);
+      setNotice(null);
+      return msg;
+    } finally {
+      setBusy(false);
     }
   };
 
-  const submit = (d: ScheduleDraft) => run(() => {
-    if (d.sessionId) {
-      const next = updateScheduledSession(state, d, users);
-      patchState(() => next);
-      return "Session updated.";
-    }
-    const { state: next } = scheduleSession(state, d, users);
-    patchState(() => next);
-    return "Defense scheduled. The panel can now open it from their dashboard.";
-  });
+  const submit = (d: ScheduleDraft) => run(() => (d.sessionId ? ops.updateSchedule(d) : ops.schedule(d)));
 
   const exportCsv = () => {
     const blob = new Blob(["﻿" + gradesCsv(locked, users)], { type: "text/csv;charset=utf-8" });
@@ -84,6 +81,7 @@ export function ScheduleManager() {
         </div>
       </div>
 
+      {failure && <p role="alert" className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">{failure}</p>}
       {notice && <p role="status" className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">{notice}</p>}
 
       {[...byDay].map(([day, list]) => (
@@ -142,7 +140,7 @@ export function ScheduleManager() {
                             <span className="flex items-center gap-1">
                               <Button size="sm" variant="destructive" onClick={() => {
                                 setConfirmDelete(null);
-                                run(() => { const next = deleteScheduledSession(state, b.session.id); patchState(() => next); return "Session removed from the schedule."; });
+                                void run(() => ops.deleteSession(b.session.id)).then(setFailure);
                               }}>Delete</Button>
                               <Button size="sm" variant="ghost" onClick={() => setConfirmDelete(null)}>Keep</Button>
                             </span>
@@ -175,7 +173,7 @@ export function ScheduleManager() {
                   Scoring has started. You can reschedule or add panelists, but the stage and the seats of panelists who already scored are locked.
                 </p>
               )}
-              <ScheduleForm key={mode.kind === "edit" ? mode.id : "new"} state={state} users={users} editing={editing}
+              <ScheduleForm key={mode.kind === "edit" ? mode.id : "new"} state={state} users={users} editing={editing} busy={busy}
                 onSubmit={submit} onCancel={() => setMode({ kind: "closed" })} />
             </CardContent>
           </Card>

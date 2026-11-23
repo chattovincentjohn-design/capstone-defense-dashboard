@@ -187,7 +187,7 @@ begin
   update public.panel_assignments
      set has_submitted = true,
          submitted_at = v_now,
-         signature_hash = encode(digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
+         signature_hash = encode(extensions.digest(auth.uid()::text || '|' || to_char(v_now at time zone 'utc',
                                  'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') || '|' || v_payload, 'sha256'), 'hex')
    where id = a.id
   returning * into a;

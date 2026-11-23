@@ -301,7 +301,7 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
   return issues;
 }
 
-function buildAttendance(panel: { id: string; role: string }[], adviserId: string | null, members: ProjectMember[], users: User[]) {
+export function buildAttendance(panel: { id: string; role: string }[], adviserId: string | null, members: ProjectMember[], users: User[]) {
   const n = (id: string) => users.find((u) => u.id === id)?.full_name ?? id;
   return [
     ...panel.map((p) => ({ id: uid("at"), name: n(p.id), role: p.role, present: true })),

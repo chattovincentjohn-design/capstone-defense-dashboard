@@ -35,14 +35,25 @@ Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordin
   template only to sessions nobody has scored. A criterion graded in a scored or locked session is never edited
   in place: it is retired and a new version is created, so finished grades never shift.
 
-## Connect Supabase
+## Live mode (Supabase)
 
-1. Run the files in `supabase/migrations/` in name order, then `supabase/seed.sql`, in the SQL Editor.
-2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-3. Promote roles: `update public.users set role='admin' where email='…';`
+When `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are set at build time, the app switches from
+the in-browser demo to the shared database: people sign in with email and password, see only what RLS allows,
+and get live updates (panel submission status, comments, minutes, the schedule) through Supabase Realtime.
+Without those variables the app runs in demo mode as before.
 
-With the env vars set, `src/middleware.ts` enforces login and role-based routes. The data calls are in
-`src/lib/supabase/repository.ts` and `realtime.ts`; each one matches an action in `src/lib/store.tsx`.
+**Set up a new Supabase project**
+
+1. In the SQL Editor, run the files in `supabase/migrations/` in name order, then `supabase/seed.sql` (default rubrics).
+2. Create accounts in **Authentication → Users → Add user** (email + password, "Auto confirm" on).
+   New accounts start as `panelist`; set real roles with SQL, e.g.
+   `update public.users set role = 'admin' where email = 'coordinator@school.edu';`
+   (roles: admin, chair, panelist, secretary, adviser, student). To let a proponent sign in, set
+   `project_members.user_id` to their account.
+3. Optional: `supabase/seed_demo.sql` loads the demo projects and defenses (expects the demo accounts to exist).
+4. Copy `.env.example` to `.env.local` with the project URL and publishable key; add the same two variables in Vercel.
+
+The publishable key is safe in the browser; access is enforced by the RLS policies and RPC checks in the migrations.
 
 ## Layout
 
@@ -53,6 +64,7 @@ With the env vars set, `src/middleware.ts` enforces login and role-based routes.
 | `src/components/admin/` | Coordinator console: schedule manager + form, rubric editor |
 | `src/lib/grading.ts` | Weighted group/individual scoring, 60/40 blend, transmutation, variance flags, suggested verdict |
 | `src/lib/signature.ts` | SHA-256 e-signatures (same format as the SQL RPCs, so they can be checked in the browser) |
+| `src/lib/store.tsx` | Store interface + demo backend; `src/lib/supabase/store.tsx` is the live backend |
 | `src/lib/permissions.ts` | Client-side copy of the RLS rules, used to decide what the UI shows |
 | `src/components/defense/` | Workspace: header/timer, rubric scorer, comment logger, minutes recorder, deliberation matrix, revision tracker |
 | `src/components/print/` | A4 print/PDF templates: Consolidated Rating Sheet, Minutes of the Defense |
