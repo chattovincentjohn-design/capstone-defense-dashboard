@@ -57,6 +57,18 @@ Without those variables the app runs in demo mode as before.
 3. Optional: `supabase/seed_demo.sql` loads the demo projects and defenses (expects the demo accounts to exist).
 4. Copy `.env.example` to `.env.local` with the project URL and publishable key; add the same two variables in Vercel.
 
+**Password reset by email** (`/forgot-password`) needs these one-time settings in the Supabase dashboard:
+
+1. **Authentication → URL Configuration**: Site URL `https://capstone-defense-dashboard.vercel.app`; add Redirect URL
+   `https://capstone-defense-dashboard.vercel.app/**` (and `http://localhost:3000/**` for local development).
+2. **Authentication → Emails → SMTP Settings**: enable custom SMTP (e.g. Gmail with an app password, Resend, Brevo).
+   Supabase's built-in sender only delivers to members of your Supabase organization, a few emails per hour.
+3. **Authentication → Emails → Templates → Reset Password**: make the link device-independent:
+   `<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset-password">Reset password</a>`
+   (the default template also works, but only in the browser where the reset was requested).
+4. **Authentication → Sign In / Providers → Email**: turn **off** "Allow new users to sign up". Accounts are created
+   by the Coordinator; with working email, open sign-up would let anyone register.
+
 The publishable key is safe in the browser; access is enforced by the RLS policies and RPC checks in the migrations.
 
 ## Layout

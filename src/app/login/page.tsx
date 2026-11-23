@@ -5,13 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { safeNextPath } from "@/lib/redirect";
 import { createClient, isSupabaseConfigured } from "@/lib/supabase/client";
+import Link from "next/link";
 
-/** Only allow same-site relative redirects. */
-function safeNext() {
-  const next = new URLSearchParams(window.location.search).get("next") ?? "/";
-  return next.startsWith("/") && !next.startsWith("//") ? next : "/";
-}
+const safeNext = () => safeNextPath(new URLSearchParams(window.location.search).get("next"));
 
 export default function LoginPage() {
   const [email, setEmail] = React.useState("");
@@ -57,7 +55,10 @@ export default function LoginPage() {
                 <Input id="email" type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="password">Password</Label>
+                <div className="flex items-baseline justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  <Link href="/forgot-password" className="text-xs text-primary hover:underline">Forgot password?</Link>
+                </div>
                 <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button className="w-full" type="submit" disabled={busy}><LogIn /> {busy ? "Signing in…" : "Sign in"}</Button>

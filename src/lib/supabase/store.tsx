@@ -13,6 +13,7 @@ import {
 import { seedGrading } from "../mock-data";
 import { applyMinutes, applyScore, StoreContext, type State, type StoreCtx, type StoreOps } from "../store";
 import type { DefenseMinutes, RubricScore, SessionBundle, User } from "../types";
+import { isPublicPath } from "../redirect";
 import { createClient } from "./client";
 import * as repo from "./repository";
 
@@ -76,7 +77,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
     const { data: { user } } = await sb.auth.getUser();
     if (!user) {
       setState({ ...EMPTY });
-      if (!window.location.pathname.startsWith("/login")) {
+      if (!isPublicPath(window.location.pathname)) {
         window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
       }
       return;
