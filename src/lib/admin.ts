@@ -16,7 +16,21 @@ import { uid } from "./utils";
 
 /** Assumed slot length used for double-booking checks. */
 export const DEFENSE_SLOT_MINUTES = 120;
-export const FACULTY_ROLES: User["role"][] = ["chair", "panelist", "adviser", "admin"];
+export const FACULTY_ROLES: User["role"][] = ["chair", "panelist", "adviser", "admin", "superadmin"];
+
+/** Coordinator or Super Admin: may run the console. */
+export const isAdminRole = (role: User["role"]) => role === "admin" || role === "superadmin";
+
+/** Roles this person may hand out. Only the Super Admin can create Coordinators or other Super Admins. */
+export function assignableRoles(actor: Pick<User, "role">): User["role"][] {
+  const all: User["role"][] = ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"];
+  return actor.role === "superadmin" ? all : all.filter((r) => !isAdminRole(r));
+}
+
+/** May this person reset the password of, disable, or edit this account? */
+export function canManageAccount(actor: Pick<User, "id" | "role">, target: Pick<User, "id" | "role">) {
+  return actor.role === "superadmin" || actor.id === target.id || !isAdminRole(target.role);
+}
 
 // ---------------------------------------------------------------------------
 // Time helpers — schedules are entered and shown in campus time (UTC+8, no DST)
@@ -468,10 +482,17 @@ export function generateTempPassword(): string {
 }
 
 /** Guards shared by both backends (the database enforces the same rules). */
-export function accountChangeProblem(actorId: string, target: Account, change: { role?: Account["role"]; active?: boolean }): string | null {
-  if (target.id !== actorId) return null;
-  if (change.active === false) return "You cannot disable your own account.";
-  if (change.role && target.role === "admin" && change.role !== "admin") return "You cannot remove your own Coordinator role.";
+export function accountChangeProblem(
+  actor: Pick<User, "id" | "role">, target: Pick<Account, "id" | "role">, change: { role?: Account["role"]; active?: boolean },
+): string | null {
+  const self = target.id === actor.id;
+  if (self && change.active === false) return "You cannot disable your own account.";
+  if (change.role && change.role !== target.role) {
+    if (self && isAdminRole(target.role)) return "You cannot change your own administrator role.";
+    if (actor.role !== "superadmin" && (isAdminRole(change.role) || isAdminRole(target.role)))
+      return "Only the Super Admin can give or remove Coordinator access.";
+  }
+  if (change.active !== undefined && !canManageAccount(actor, target)) return "Only the Super Admin can manage Coordinator accounts.";
   return null;
 }
 

@@ -5,6 +5,7 @@
 import type { DefenseStage, RubricCriterion, RubricScore, SessionBundle, StageBlend, User } from "./types";
 
 export const USERS: User[] = [
+  { id: "u-super", full_name: "Dr. Elena R. Santos", email: "superadmin@demo.edu", role: "superadmin", department: "Office of the Dean" },
   { id: "u-admin", full_name: "Engr. Liza M. Fernandez", email: "coordinator@demo.edu", role: "admin", department: "College of Computing Studies" },
   { id: "u-ramos", full_name: "Dr. Antonio C. Ramos", email: "aramos@demo.edu", role: "chair", department: "College of Computing Studies" },
   { id: "u-diaz", full_name: "Prof. Maria L. Diaz", email: "mdiaz@demo.edu", role: "panelist", department: "College of Computing Studies" },

@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
+  accountChangeProblem, accountProblems, assignableRoles, canManageAccount, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
@@ -19,7 +19,7 @@ import type {
 } from "./types";
 import { uid } from "./utils";
 
-const STORAGE_KEY = "cdms-demo-state-v1";
+const STORAGE_KEY = "cdms-demo-state-v2";
 
 export interface State {
   bundles: Record<string, SessionBundle>;
@@ -281,6 +281,8 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const s = stateRef.current;
         const problems = accountProblems(input, s.accounts);
         if (problems.length) throw new Error(problems.join(" "));
+        const actor = s.accounts.find((a) => a.id === s.currentUserId);
+        if (!actor || !assignableRoles(actor).includes(input.role)) throw new Error("Only the Super Admin can create Coordinator accounts.");
         const account: Account = {
           id: uid("u"), email: input.email.trim().toLowerCase(), full_name: input.full_name.trim(), role: input.role,
           department: input.department.trim() || null, is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
@@ -292,19 +294,25 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const s = stateRef.current;
         const target = s.accounts.find((a) => a.id === id);
         if (!target) throw new Error("Account not found.");
-        const problem = accountChangeProblem(s.currentUserId, target, { role: patch.role });
+        const actor = s.accounts.find((a) => a.id === s.currentUserId)!;
+        if (!canManageAccount(actor, target)) throw new Error("Only the Super Admin can manage Coordinator accounts.");
+        const problem = accountChangeProblem(actor, target, { role: patch.role });
         if (problem) throw new Error(problem);
         replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
       },
       async resetPassword(id) {
-        if (!stateRef.current.accounts.some((a) => a.id === id)) throw new Error("Account not found.");
+        const s = stateRef.current;
+        const target = s.accounts.find((a) => a.id === id);
+        if (!target) throw new Error("Account not found.");
+        const actor = s.accounts.find((a) => a.id === s.currentUserId)!;
+        if (!canManageAccount(actor, target)) throw new Error("Only the Super Admin can manage Coordinator accounts.");
         return generateTempPassword();
       },
       async setAccountActive(id, active) {
         const s = stateRef.current;
         const target = s.accounts.find((a) => a.id === id);
         if (!target) throw new Error("Account not found.");
-        const problem = accountChangeProblem(s.currentUserId, target, { active });
+        const problem = accountChangeProblem(s.accounts.find((a) => a.id === s.currentUserId)!, target, { active });
         if (problem) throw new Error(problem);
         replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, is_active: active } : a)) });
       },

@@ -33,7 +33,7 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
       <main className="mx-auto max-w-6xl p-4">
         {!state.hydrated ? (
           <p className="p-10 text-center text-sm text-muted-foreground">Loading…</p>
-        ) : currentUser.role !== "admin" ? (
+        ) : currentUser.role !== "admin" && currentUser.role !== "superadmin" ? (
           <Card className="mx-auto mt-10 max-w-md">
             <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
               <ShieldAlert className="size-8 text-warning" />

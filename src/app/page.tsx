@@ -13,7 +13,7 @@ export default function Home() {
   const { mode, state, reset, currentUser } = useStore();
   const sessions = state.order.map((id) => state.bundles[id]);
   const mine = sessions.filter((b) =>
-    currentUser.role === "admin" ||
+    currentUser.role === "admin" || currentUser.role === "superadmin" ||
     b.assignments.some((a) => a.faculty_id === currentUser.id) ||
     b.session.secretary_id === currentUser.id ||
     b.project.adviser_id === currentUser.id ||
@@ -29,8 +29,8 @@ export default function Home() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {currentUser.role === "admin" && (
-            <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> Coordinator console</Link></Button>
+          {(currentUser.role === "admin" || currentUser.role === "superadmin") && (
+            <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> {currentUser.role === "superadmin" ? "Super admin console" : "Coordinator console"}</Link></Button>
           )}
           <RoleSwitcher />
         </div>

@@ -23,7 +23,7 @@ export function resolveViewer(user: User, bundle: SessionBundle): Viewer {
     isChair: assignment?.panel_role === "chair",
     isPanelist: !!assignment,
     isSecretary: bundle.session.secretary_id === user.id,
-    isAdmin: user.role === "admin",
+    isAdmin: user.role === "admin" || user.role === "superadmin",
     isAdviser: bundle.project.adviser_id === user.id,
     isStudent: bundle.members.some((m) => m.user_id === user.id),
   };

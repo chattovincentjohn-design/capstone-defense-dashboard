@@ -65,7 +65,7 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const faculty = users.filter((u) => FACULTY_ROLES.includes(u.role));
-  const staff = users.filter((u) => u.role === "secretary" || u.role === "admin");
+  const staff = users.filter((u) => u.role === "secretary" || u.role === "admin" || u.role === "superadmin");
   const advisers = users.filter((u) => u.role === "adviser" || u.role === "chair" || u.role === "panelist");
   const selectedProject = projects.find((p) => p.project.id === f.projectId);
   const adviserId = f.projectId === "new" ? f.adviserId || null : selectedProject?.project.adviser_id ?? null;

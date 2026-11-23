@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -202,10 +202,29 @@ describe("accounts", () => {
   });
   it("stops coordinators from disabling or demoting themselves", () => {
     const admin = existing.find((a) => a.id === "u-admin")!;
-    expect(accountChangeProblem("u-admin", admin, { active: false })).toMatch(/disable your own/);
-    expect(accountChangeProblem("u-admin", admin, { role: "panelist" })).toMatch(/own Coordinator role/);
-    expect(accountChangeProblem("u-admin", admin, { role: "admin" })).toBeNull();
-    expect(accountChangeProblem("u-admin", existing.find((a) => a.id === "u-diaz")!, { active: false })).toBeNull();
+    expect(accountChangeProblem(admin, admin, { active: false })).toMatch(/disable your own/);
+    expect(accountChangeProblem(admin, admin, { role: "panelist" })).toMatch(/own administrator role/);
+    expect(accountChangeProblem(admin, admin, { role: "admin" })).toBeNull();
+    const diaz = existing.find((a) => a.id === "u-diaz")!;
+    expect(accountChangeProblem(admin, diaz, { active: false })).toBeNull();
+    expect(accountChangeProblem(admin, diaz, { role: "chair" })).toBeNull();
+  });
+
+  it("only the Super Admin manages Coordinators", () => {
+    const admin = existing.find((a) => a.id === "u-admin")!;
+    const sup = existing.find((a) => a.id === "u-super")!;
+    const diaz = existing.find((a) => a.id === "u-diaz")!;
+    expect(sup.role).toBe("superadmin");
+    expect(accountChangeProblem(admin, diaz, { role: "admin" })).toMatch(/Only the Super Admin/);
+    expect(accountChangeProblem(admin, sup, { active: false })).toMatch(/Only the Super Admin/);
+    expect(accountChangeProblem(sup, admin, { role: "panelist" })).toBeNull();
+    expect(accountChangeProblem(sup, diaz, { role: "admin" })).toBeNull();
+    expect(accountChangeProblem(sup, sup, { role: "admin" })).toMatch(/own administrator role/);
+    expect(assignableRoles(admin)).not.toContain("admin");
+    expect(assignableRoles(admin)).not.toContain("superadmin");
+    expect(assignableRoles(sup)).toContain("admin");
+    expect(canManageAccount(admin, sup)).toBe(false);
+    expect(canManageAccount(admin, diaz)).toBe(true);
   });
 });
 

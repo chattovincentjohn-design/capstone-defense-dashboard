@@ -17,6 +17,12 @@ Use **"Viewing as"** to switch between Chair, Panelists, Secretary, Adviser, Coo
 individual criteria and submit. Open **Deliberation**, then **Finalize & Lock**. Then as *Engr. Reyes* (Adviser),
 resolve revisions, and open the printable Rating Sheet and Minutes. **Reset demo data** is on the home page.
 
+## Super Admin
+
+The **Super Admin** can do everything the Coordinator can, and is the only one who can create, promote,
+demote, reset or disable Coordinator (and Super Admin) accounts. Coordinators manage every other account.
+The database enforces this (`is_superadmin()`, `can_manage_account()`, `protect_user_role`).
+
 ## Coordinator console (`/admin`)
 
 Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordinator console* from the home page.

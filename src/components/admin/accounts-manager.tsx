@@ -7,12 +7,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { accountChangeProblem, accountProblems } from "@/lib/admin";
+import { accountChangeProblem, accountProblems, assignableRoles, canManageAccount, isAdminRole } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { ROLE_LABEL, type Account, type AccountInput, type UserRole } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 
-const ROLES: UserRole[] = ["admin", "chair", "panelist", "secretary", "adviser", "student"];
+const ROLES: UserRole[] = ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"];
 const errText = (e: unknown) => (e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
 const BLANK: AccountInput = { full_name: "", email: "", role: "panelist", department: "" };
 
@@ -92,7 +92,7 @@ export function AccountsManager() {
       )}
 
       {showForm && (
-        <CreateAccountForm existing={accounts} onCancel={() => setShowForm(false)}
+        <CreateAccountForm existing={accounts} roles={assignableRoles(currentUser)} onCancel={() => setShowForm(false)}
           onCreate={async (input) => {
             const { account, tempPassword } = await ops.createAccount(input);
             setShowForm(false);
@@ -121,6 +121,9 @@ export function AccountsManager() {
               {shown.map((a) => {
                 const self = a.id === currentUser.id;
                 const busy = busyId === a.id;
+                const manageable = canManageAccount(currentUser, a);
+                const lockedHint = !manageable ? "Only the Super Admin can manage Coordinator accounts" : undefined;
+                const roleOptions = ROLES.filter((r) => r === a.role || assignableRoles(currentUser).includes(r));
                 return (
                   <tr key={a.id} className={cn("border-b align-middle last:border-0", !a.is_active && "opacity-60")}>
                     <td className="px-4 py-2.5">
@@ -129,19 +132,19 @@ export function AccountsManager() {
                     </td>
                     <td className="px-2 py-2.5">
                       <NativeSelect className="h-8 w-44 text-xs" aria-label={`Role for ${a.full_name}`} value={a.role}
-                        disabled={busy || (self && a.role === "admin")}
-                        title={self && a.role === "admin" ? "You cannot remove your own Coordinator role" : undefined}
+                        disabled={busy || !manageable || (self && isAdminRole(a.role))}
+                        title={self && isAdminRole(a.role) ? "You cannot change your own administrator role" : lockedHint}
                         onChange={(e) => {
                           const role = e.target.value as UserRole;
-                          const problem = accountChangeProblem(currentUser.id, a, { role });
+                          const problem = accountChangeProblem(currentUser, a, { role });
                           if (problem) return setNotice({ ok: false, text: problem });
                           void act(a.id, () => ops.updateAccount(a.id, { role }), `${a.full_name} is now ${ROLE_LABEL[role]}.`);
                         }}>
-                        {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                        {roleOptions.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </NativeSelect>
                     </td>
                     <td className="px-2 py-2.5">
-                      <DepartmentField account={a} disabled={busy}
+                      <DepartmentField account={a} disabled={busy || !manageable}
                         onSave={(department) => act(a.id, () => ops.updateAccount(a.id, { department: department || null }), `Department updated for ${a.full_name}.`)} />
                     </td>
                     <td className="px-2 py-2.5">
@@ -167,13 +170,13 @@ export function AccountsManager() {
                         </div>
                       ) : (
                         <div className="flex justify-end gap-1">
-                          <Button size="sm" variant="ghost" disabled={busy || !a.is_active} onClick={() => { setConfirm({ id: a.id, action: "reset" }); setCredential(null); }}
+                          <Button size="sm" variant="ghost" disabled={busy || !a.is_active || !manageable} title={lockedHint} onClick={() => { setConfirm({ id: a.id, action: "reset" }); setCredential(null); }}
                             aria-label={`Reset password for ${a.full_name}`}><KeyRound /> Reset password</Button>
                           {a.is_active ? (
-                            <Button size="sm" variant="ghost" disabled={busy || self} title={self ? "You cannot disable your own account" : undefined}
+                            <Button size="sm" variant="ghost" disabled={busy || self || !manageable} title={self ? "You cannot disable your own account" : lockedHint}
                               onClick={() => setConfirm({ id: a.id, action: "disable" })} aria-label={`Disable ${a.full_name}`}><PowerOff /> Disable</Button>
                           ) : (
-                            <Button size="sm" variant="ghost" disabled={busy} aria-label={`Enable ${a.full_name}`}
+                            <Button size="sm" variant="ghost" disabled={busy || !manageable} title={lockedHint} aria-label={`Enable ${a.full_name}`}
                               onClick={() => void act(a.id, () => ops.setAccountActive(a.id, true), `${a.full_name} can sign in again.`)}><Power /> Enable</Button>
                           )}
                         </div>
@@ -205,8 +208,8 @@ function DepartmentField({ account, disabled, onSave }: { account: Account; disa
   );
 }
 
-function CreateAccountForm({ existing, onCreate, onCancel }: {
-  existing: Account[]; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
+function CreateAccountForm({ existing, roles, onCreate, onCancel }: {
+  existing: Account[]; roles: UserRole[]; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
 }) {
   const [f, setF] = React.useState<AccountInput>(BLANK);
   const [attempted, setAttempted] = React.useState(false);
@@ -247,7 +250,7 @@ function CreateAccountForm({ existing, onCreate, onCancel }: {
             <div className="space-y-1">
               <Label htmlFor="acc-role">Role</Label>
               <NativeSelect id="acc-role" value={f.role} onChange={(e) => set("role", e.target.value as UserRole)}>
-                {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
               </NativeSelect>
             </div>
             <div className="space-y-1">
@@ -255,7 +258,8 @@ function CreateAccountForm({ existing, onCreate, onCancel }: {
               <Input id="acc-dept" value={f.department} onChange={(e) => set("department", e.target.value)} placeholder="College of Computing Studies" />
             </div>
           </div>
-          {f.role === "admin" && <p className="text-xs text-warning">Coordinators can manage every schedule, rubric and account.</p>}
+          {f.role === "admin" && <p className="text-xs text-warning">Coordinators can manage every schedule, rubric and non-Coordinator account.</p>}
+          {f.role === "superadmin" && <p className="text-xs text-warning">Super Admins can do everything, including managing Coordinators.</p>}
           {((attempted && problems.length > 0) || serverError) && (
             <ul className="space-y-1 text-xs text-destructive" aria-live="polite">
               {attempted && problems.map((p) => <li key={p} className="flex gap-1.5"><XCircle className="mt-px size-3.5 shrink-0" />{p}</li>)}

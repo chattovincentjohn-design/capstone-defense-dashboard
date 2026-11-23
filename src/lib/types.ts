@@ -1,6 +1,6 @@
 // Domain types — mirror supabase/migrations/*_capstone_defense.sql 1:1.
 
-export type UserRole = "admin" | "chair" | "panelist" | "secretary" | "adviser" | "student";
+export type UserRole = "superadmin" | "admin" | "chair" | "panelist" | "secretary" | "adviser" | "student";
 export type DefenseStage = "title" | "proposal" | "final";
 export type Verdict = "passed" | "passed_minor_revisions" | "passed_major_revisions" | "re_defense";
 export type PanelRole = "chair" | "member";
@@ -198,6 +198,7 @@ export const SEVERITY_LABEL: Record<CommentSeverity, string> = {
 };
 
 export const ROLE_LABEL: Record<UserRole, string> = {
+  superadmin: "Super Admin",
   admin: "Capstone Coordinator",
   chair: "Defense Chair",
   panelist: "Panel Member",
