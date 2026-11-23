@@ -8,6 +8,7 @@ import { createServerClient } from "@supabase/ssr";
 const ROLE_ROUTES: { prefix: string; roles: string[] }[] = [
   { prefix: "/admin", roles: ["admin"] },
   { prefix: "/defense", roles: ["admin", "chair", "panelist", "secretary", "adviser", "student"] },
+  { prefix: "/account", roles: ["admin", "chair", "panelist", "secretary", "adviser", "student"] },
   { prefix: "/print", roles: ["admin", "chair", "panelist", "secretary", "adviser"] },
 ];
 

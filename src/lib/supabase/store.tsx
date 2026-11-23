@@ -20,7 +20,7 @@ const SCORE_SAVE_MS = 500;
 const MINUTES_SAVE_MS = 800;
 const RELOAD_DEBOUNCE_MS = 250;
 
-const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), currentUserId: "", hydrated: false };
+const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], currentUserId: "", hydrated: false };
 const GUEST: User = { id: "", full_name: "Signed out", email: "", role: "student", department: null };
 
 const message = (e: unknown) =>
@@ -92,6 +92,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         order: ids,
         rubric,
         grading: { ...seedGrading(), ...grading },
+        accounts: [],
         currentUserId: user.id,
         hydrated: true,
       });
@@ -312,6 +313,23 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await loadAll();
       return report;
     },
+
+    // ---- Accounts (admin-only RPCs) ----------------------------------------
+    listAccounts: () => repo.listAccounts(sb),
+    async createAccount(input) {
+      const { userId, tempPassword } = await repo.createAccount(sb, input);
+      const accounts = await repo.listAccounts(sb);
+      setUsers(await repo.listUsers(sb));
+      const account = accounts.find((a) => a.id === userId);
+      if (!account) throw new Error("Account was created but could not be loaded.");
+      return { account, tempPassword };
+    },
+    async updateAccount(id, patch) {
+      await repo.updateAccount(sb, id, patch);
+      setUsers(await repo.listUsers(sb));
+    },
+    resetPassword: (id) => repo.resetPassword(sb, id),
+    setAccountActive: (id, active) => repo.setAccountActive(sb, id, active),
   }), [sb, patch, saveScore, flushScores, saveMinutesNow, attempt, loadAll, users]);
 
   // Save pending edits if the tab is closed mid-pause.

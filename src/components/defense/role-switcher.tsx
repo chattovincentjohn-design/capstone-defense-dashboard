@@ -1,5 +1,6 @@
 "use client";
-import { LogOut, UserCog, UserRound } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, LogOut, UserCog, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useStore } from "@/lib/store";
@@ -16,6 +17,7 @@ export function RoleSwitcher() {
           <span className="font-medium">{currentUser.full_name}</span>
           <span className="text-muted-foreground"> · {ROLE_LABEL[currentUser.role]}</span>
         </span>
+        <Button asChild size="sm" variant="ghost"><Link href="/account"><KeyRound /> Change password</Link></Button>
         <Button size="sm" variant="ghost" onClick={() => void signOut()}><LogOut /> Sign out</Button>
       </div>
     );
@@ -25,7 +27,7 @@ export function RoleSwitcher() {
       <UserCog className="size-4 text-primary" aria-hidden />
       <span className="hidden sm:inline">Viewing as</span>
       <NativeSelect className="h-8 w-full min-w-0 text-xs sm:w-56" value={currentUser.id} onChange={(e) => setUser(e.target.value)} aria-label="Switch demo user">
-        {users.map((u) => (
+        {users.filter((u) => (u as { is_active?: boolean }).is_active !== false || u.id === currentUser.id).map((u) => (
           <option key={u.id} value={u.id}>{u.full_name} — {ROLE_LABEL[u.role]}</option>
         ))}
       </NativeSelect>

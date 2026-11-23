@@ -16,6 +16,20 @@ export interface User {
   department: string | null;
 }
 
+/** A sign-in account as the Coordinator sees it. */
+export interface Account extends User {
+  is_active: boolean;
+  created_at: string | null;
+  last_sign_in_at: string | null;
+}
+
+export interface AccountInput {
+  email: string;
+  full_name: string;
+  role: UserRole;
+  department: string;
+}
+
 export interface CapstoneProject {
   id: string;
   title: string;

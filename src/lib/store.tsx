@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  deleteScheduledSession, saveStageRubric, scheduleSession, updateScheduledSession,
-  type RubricSaveReport, type ScheduleDraft,
+  accountChangeProblem, accountProblems, deleteScheduledSession, generateTempPassword, saveStageRubric,
+  scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
+  Account, AccountInput, DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
 
@@ -28,9 +28,13 @@ export interface State {
   /** Group/individual final-grade blend per stage (sessions hold frozen copies). */
   grading: Record<DefenseStage, StageBlend>;
   order: string[];
+  /** Demo only: the editable cast. Live mode loads accounts on demand from the database. */
+  accounts: Account[];
   currentUserId: string;
   hydrated: boolean;
 }
+
+export type AccountPatch = Partial<Pick<Account, "full_name" | "role" | "department">>;
 
 export type NewComment = Pick<PanelComment, "panel_assignment_id" | "category" | "severity" | "comment_text">;
 
@@ -47,6 +51,11 @@ export interface StoreOps {
   updateSchedule(draft: ScheduleDraft): Promise<string>;
   deleteSession(sessionId: string): Promise<string>;
   saveRubric(stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend): Promise<RubricSaveReport>;
+  listAccounts(): Promise<Account[]>;
+  createAccount(input: AccountInput): Promise<{ account: Account; tempPassword: string }>;
+  updateAccount(id: string, patch: AccountPatch): Promise<void>;
+  resetPassword(id: string): Promise<string>;
+  setAccountActive(id: string, active: boolean): Promise<void>;
 }
 
 export interface StoreCtx {
@@ -100,6 +109,7 @@ function initial(): State {
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
     grading: seedGrading(),
+    accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -155,7 +165,8 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     if (!state.hydrated) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading, currentUserId: state.currentUserId,
+        bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
+        accounts: state.accounts, currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
   }, [state]);
@@ -225,11 +236,11 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       },
       updateMinutes: (sessionId, fn) => patch(sessionId, (b) => applyMinutes(b, fn)),
       async schedule(draft) {
-        replaceAll(scheduleSession(stateRef.current, draft, USERS).state);
+        replaceAll(scheduleSession(stateRef.current, draft, stateRef.current.accounts).state);
         return "Defense scheduled. The panel can now open it from their dashboard.";
       },
       async updateSchedule(draft) {
-        replaceAll(updateScheduledSession(stateRef.current, draft, USERS));
+        replaceAll(updateScheduledSession(stateRef.current, draft, stateRef.current.accounts));
         return "Session updated.";
       },
       async deleteSession(sessionId) {
@@ -241,14 +252,50 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         replaceAll(next);
         return report;
       },
+
+      // Demo accounts have no real passwords; the flow mirrors the live one.
+      async listAccounts() {
+        return [...stateRef.current.accounts].sort((a, b) => a.full_name.localeCompare(b.full_name));
+      },
+      async createAccount(input) {
+        const s = stateRef.current;
+        const problems = accountProblems(input, s.accounts);
+        if (problems.length) throw new Error(problems.join(" "));
+        const account: Account = {
+          id: uid("u"), email: input.email.trim().toLowerCase(), full_name: input.full_name.trim(), role: input.role,
+          department: input.department.trim() || null, is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+        };
+        replaceAll({ ...s, accounts: [...s.accounts, account] });
+        return { account, tempPassword: generateTempPassword() };
+      },
+      async updateAccount(id, patch) {
+        const s = stateRef.current;
+        const target = s.accounts.find((a) => a.id === id);
+        if (!target) throw new Error("Account not found.");
+        const problem = accountChangeProblem(s.currentUserId, target, { role: patch.role });
+        if (problem) throw new Error(problem);
+        replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+      },
+      async resetPassword(id) {
+        if (!stateRef.current.accounts.some((a) => a.id === id)) throw new Error("Account not found.");
+        return generateTempPassword();
+      },
+      async setAccountActive(id, active) {
+        const s = stateRef.current;
+        const target = s.accounts.find((a) => a.id === id);
+        if (!target) throw new Error("Account not found.");
+        const problem = accountChangeProblem(s.currentUserId, target, { active });
+        if (problem) throw new Error(problem);
+        replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, is_active: active } : a)) });
+      },
     };
   }, []);
 
   const value = React.useMemo<StoreCtx>(() => ({
     mode: "demo",
     state,
-    users: USERS,
-    currentUser: USERS.find((u) => u.id === state.currentUserId) ?? USERS[0],
+    users: state.accounts,
+    currentUser: state.accounts.find((u) => u.id === state.currentUserId) ?? state.accounts[0] ?? USERS[0],
     ops,
     error,
     clearError: () => setError(null),

@@ -29,7 +29,11 @@ export default function LoginPage() {
     setMsg(null);
     const { error } = await createClient().auth.signInWithPassword({ email: email.trim(), password });
     if (error) {
-      setMsg(error.message === "Invalid login credentials" ? "Incorrect email or password." : error.message);
+      setMsg(
+        error.message === "Invalid login credentials" ? "Incorrect email or password."
+          : /banned/i.test(error.message) ? "This account is disabled. Contact the Capstone Coordinator."
+          : error.message,
+      );
       setBusy(false);
       return;
     }

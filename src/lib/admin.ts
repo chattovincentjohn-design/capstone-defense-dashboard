@@ -8,7 +8,7 @@
 import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
-  CapstoneProject, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
+  Account, AccountInput, CapstoneProject, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
   RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
@@ -428,4 +428,38 @@ export function gradesCsv(bundles: SessionBundle[], users: User[]): string {
     }
   }
   return [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n");
+}
+
+// ---------------------------------------------------------------------------
+// Accounts
+// ---------------------------------------------------------------------------
+export const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
+export function accountProblems(input: AccountInput, existing: Pick<Account, "email">[]): string[] {
+  const p: string[] = [];
+  if (!input.full_name.trim()) p.push("Full name is required.");
+  const email = input.email.trim().toLowerCase();
+  if (!EMAIL_RE.test(email)) p.push("Enter a valid email address.");
+  else if (existing.some((a) => a.email.toLowerCase() === email)) p.push("An account with this email already exists.");
+  return p;
+}
+
+/** Same shape as private.temp_password() in SQL: xxxx-xxxx-xxxx without look-alike characters. */
+export function generateTempPassword(): string {
+  const alphabet = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  let out = "";
+  bytes.forEach((b, i) => {
+    out += alphabet[b % alphabet.length];
+    if (i === 3 || i === 7) out += "-";
+  });
+  return out;
+}
+
+/** Guards shared by both backends (the database enforces the same rules). */
+export function accountChangeProblem(actorId: string, target: Account, change: { role?: Account["role"]; active?: boolean }): string | null {
+  if (target.id !== actorId) return null;
+  if (change.active === false) return "You cannot disable your own account.";
+  if (change.role && target.role === "admin" && change.role !== "admin") return "You cannot remove your own Coordinator role.";
+  return null;
 }

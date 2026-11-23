@@ -1,15 +1,19 @@
 "use client";
 import Link from "next/link";
-import { ArrowLeft, CalendarDays, ListChecks, ShieldAlert } from "lucide-react";
+import { ArrowLeft, CalendarDays, ListChecks, ShieldAlert, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RoleSwitcher } from "@/components/defense/role-switcher";
 import { useStore } from "@/lib/store";
+import { AccountsManager } from "./accounts-manager";
 import { RubricEditor } from "./rubric-editor";
 import { ScheduleManager } from "./schedule-manager";
 
-export function AdminConsole() {
+export type ConsoleTab = "schedule" | "rubric" | "accounts";
+const TAB_PATH: Record<ConsoleTab, string> = { schedule: "/admin", rubric: "/admin/rubric", accounts: "/admin/accounts" };
+
+export function AdminConsole({ initialTab = "schedule" }: { initialTab?: ConsoleTab }) {
   const { currentUser, state } = useStore();
 
   return (
@@ -19,7 +23,7 @@ export function AdminConsole() {
           <Button asChild size="icon" variant="ghost" aria-label="Back to dashboard"><Link href="/"><ArrowLeft /></Link></Button>
           <div>
             <h1 className="text-base font-bold uppercase tracking-wider sm:text-lg">Coordinator Console</h1>
-            <p className="text-xs text-muted-foreground">Defense scheduling · Panel assignment · Rubric configuration</p>
+            <p className="text-xs text-muted-foreground">Defense scheduling · Rubric configuration · Faculty accounts</p>
           </div>
         </div>
         <RoleSwitcher />
@@ -39,15 +43,18 @@ export function AdminConsole() {
             </CardContent>
           </Card>
         ) : (
-          <Tabs defaultValue="schedule" className="space-y-4">
+          <Tabs defaultValue={initialTab} className="space-y-4"
+            onValueChange={(v) => window.history.replaceState(null, "", TAB_PATH[v as ConsoleTab])}>
             <Card className="overflow-hidden">
               <TabsList className="border-0">
                 <TabsTrigger value="schedule"><CalendarDays /> Defense Schedule</TabsTrigger>
                 <TabsTrigger value="rubric"><ListChecks /> Rubric Configuration</TabsTrigger>
+                <TabsTrigger value="accounts"><Users /> Faculty Accounts</TabsTrigger>
               </TabsList>
             </Card>
             <TabsContent value="schedule"><ScheduleManager /></TabsContent>
             <TabsContent value="rubric"><RubricEditor /></TabsContent>
+            <TabsContent value="accounts"><AccountsManager /></TabsContent>
           </Tabs>
         )}
       </main>

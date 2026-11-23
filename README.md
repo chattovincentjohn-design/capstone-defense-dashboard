@@ -30,6 +30,9 @@ Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordin
 - **Final Grade Blend:** per stage, set how much the group score and the individual score count toward each
   proponent's final grade (default 60/40; the two shares must total 100). Each defense keeps the blend it was
   scheduled with, so a change only reaches defenses nobody has scored yet.
+- **Faculty Accounts** (live mode): create sign-in accounts (temporary password shown once), change role or
+  department, reset a password (signs the person out everywhere), disable or re-enable sign-in. Coordinators can't
+  disable or demote themselves.
 - **Rubric Configuration:** per stage, add, remove, reorder, and reweight group and individual criteria
   (each section must total 100%). Each session keeps the rubric it was scheduled with. Saving re-applies the
   template only to sessions nobody has scored. A criterion graded in a scored or locked session is never edited
@@ -45,11 +48,12 @@ Without those variables the app runs in demo mode as before.
 **Set up a new Supabase project**
 
 1. In the SQL Editor, run the files in `supabase/migrations/` in name order, then `supabase/seed.sql` (default rubrics).
-2. Create accounts in **Authentication → Users → Add user** (email + password, "Auto confirm" on).
-   New accounts start as `panelist`; set real roles with SQL, e.g.
-   `update public.users set role = 'admin' where email = 'coordinator@school.edu';`
-   (roles: admin, chair, panelist, secretary, adviser, student). To let a proponent sign in, set
-   `project_members.user_id` to their account.
+2. Create the first Coordinator in **Authentication → Users → Add user** (email + password, "Auto confirm" on),
+   then promote it: `update public.users set role = 'admin' where email = 'coordinator@school.edu';`
+   Everyone else is added from the app: **Coordinator console → Faculty Accounts** (`/admin/accounts`) creates
+   accounts with a one-time temporary password, edits roles and departments, resets passwords and disables sign-in.
+   People change their password under their name → **Change password**. To let a proponent see their own defense,
+   set `project_members.user_id` to their account.
 3. Optional: `supabase/seed_demo.sql` loads the demo projects and defenses (expects the demo accounts to exist).
 4. Copy `.env.example` to `.env.local` with the project URL and publishable key; add the same two variables in Vercel.
 

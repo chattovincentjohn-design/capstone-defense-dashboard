@@ -232,3 +232,41 @@ export async function setStageBlend(sb: SupabaseClient, stage: DefenseStage, ble
     .eq("stage", stage);
   if (error) throw error;
 }
+
+// ---------------------------------------------------------------------------
+// Accounts (admin-only RPCs; see migrations/*_account_management.sql)
+// ---------------------------------------------------------------------------
+type AccountRow = import("../types").Account;
+
+export async function listAccounts(sb: SupabaseClient): Promise<AccountRow[]> {
+  const { data, error } = await sb.rpc("admin_list_accounts");
+  if (error) throw error;
+  return data as AccountRow[];
+}
+
+export async function createAccount(sb: SupabaseClient, input: import("../types").AccountInput) {
+  const { data, error } = await sb.rpc("admin_create_account", {
+    p_email: input.email, p_full_name: input.full_name, p_role: input.role, p_department: input.department,
+  });
+  if (error) throw error;
+  const row = (data as { user_id: string; temp_password: string }[])[0];
+  return { userId: row.user_id, tempPassword: row.temp_password };
+}
+
+export async function updateAccount(
+  sb: SupabaseClient, id: string, patch: Partial<Pick<AccountRow, "full_name" | "role" | "department">>,
+) {
+  const { error } = await sb.from("users").update(patch).eq("id", id);
+  if (error) throw error;
+}
+
+export async function resetPassword(sb: SupabaseClient, id: string): Promise<string> {
+  const { data, error } = await sb.rpc("admin_reset_password", { p_user: id });
+  if (error) throw error;
+  return data as string;
+}
+
+export async function setAccountActive(sb: SupabaseClient, id: string, active: boolean) {
+  const { error } = await sb.rpc("admin_set_account_active", { p_user: id, p_active: active });
+  if (error) throw error;
+}

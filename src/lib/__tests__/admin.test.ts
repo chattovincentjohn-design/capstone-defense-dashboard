@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import {
+  accountChangeProblem, accountProblems, generateTempPassword,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -14,6 +15,7 @@ function state(): State {
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
     grading: seedGrading(),
+    accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     currentUserId: "u-admin",
     hydrated: true,
   };
@@ -177,5 +179,31 @@ describe("per-stage grade blend", () => {
   it("blocks scheduling when the stage blend is invalid", () => {
     const s = { ...state(), grading: { ...seedGrading(), title: { groupWeight: 90, individualWeight: 20 } } };
     expect(errors(s, draft()).join()).toMatch(/grade blend is not ready/);
+  });
+});
+
+describe("accounts", () => {
+  const existing = USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null }));
+  it("validates name, email format and duplicates (case-insensitive)", () => {
+    expect(accountProblems({ email: "new@school.edu", full_name: "Prof. New", role: "panelist", department: "" }, existing)).toEqual([]);
+    expect(accountProblems({ email: "not-an-email", full_name: "", role: "panelist", department: "" }, existing))
+      .toEqual(["Full name is required.", "Enter a valid email address."]);
+    expect(accountProblems({ email: "  MDIAZ@demo.edu ", full_name: "X", role: "panelist", department: "" }, existing)[0]).toMatch(/already exists/);
+  });
+  it("generates strong temporary passwords without look-alike characters", () => {
+    const seen = new Set<string>();
+    for (let i = 0; i < 200; i++) {
+      const pw = generateTempPassword();
+      expect(pw).toMatch(/^[a-km-np-zA-HJ-NP-Z2-9]{4}-[a-km-np-zA-HJ-NP-Z2-9]{4}-[a-km-np-zA-HJ-NP-Z2-9]{4}$/);
+      seen.add(pw);
+    }
+    expect(seen.size).toBe(200);
+  });
+  it("stops coordinators from disabling or demoting themselves", () => {
+    const admin = existing.find((a) => a.id === "u-admin")!;
+    expect(accountChangeProblem("u-admin", admin, { active: false })).toMatch(/disable your own/);
+    expect(accountChangeProblem("u-admin", admin, { role: "panelist" })).toMatch(/own Coordinator role/);
+    expect(accountChangeProblem("u-admin", admin, { role: "admin" })).toBeNull();
+    expect(accountChangeProblem("u-admin", existing.find((a) => a.id === "u-diaz")!, { active: false })).toBeNull();
   });
 });
