@@ -50,22 +50,24 @@ function initialForm(editing: SessionBundle | undefined, projects: ReturnType<ty
   };
 }
 
-export function ScheduleForm({ state, users, editing, busy = false, onSubmit, onCancel }: {
+export function ScheduleForm({ state, users, editing, busy = false, programId, onSubmit, onCancel }: {
   state: State;
   users: User[];
   editing?: SessionBundle;
   busy?: boolean;
+  /** Course new projects are created in; panelists may come from any course. */
+  programId: string;
   onSubmit: (d: ScheduleDraft) => Promise<string | null>; // resolves to an error message or null
   onCancel: () => void;
 }) {
-  const projects = React.useMemo(() => listProjects(state), [state]);
+  const projects = React.useMemo(() => listProjects(state, programId), [state, programId]);
   const [f, setF] = React.useState<FormState>(() => initialForm(editing, projects));
   const [attempted, setAttempted] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
 
   const faculty = users.filter((u) => FACULTY_ROLES.includes(u.role));
-  const staff = users.filter((u) => u.role === "secretary" || u.role === "admin");
+  const staff = users.filter((u) => u.role === "secretary" || u.role === "admin" || u.role === "superadmin");
   const advisers = users.filter((u) => u.role === "adviser" || u.role === "chair" || u.role === "panelist");
   const selectedProject = projects.find((p) => p.project.id === f.projectId);
   const adviserId = f.projectId === "new" ? f.adviserId || null : selectedProject?.project.adviser_id ?? null;
@@ -74,6 +76,7 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
 
   const draft: ScheduleDraft = {
     sessionId: editing?.session.id,
+    programId,
     projectId: f.projectId,
     newProject: f.projectId === "new" ? {
       title: f.title, group_label: f.groupLabel, adviser_id: f.adviserId || null, academic_year: f.academicYear,
@@ -218,7 +221,7 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
                       onCheckedChange={(v) => set("memberIds", v === true ? [...f.memberIds, u.id] : f.memberIds.filter((m) => m !== u.id))} />
                     <span className="flex-1">{u.full_name}</span>
                     <span className="text-[11px] text-muted-foreground">
-                      {isAdviser ? "adviser" : locked ? "has scores" : u.department?.replace("College of ", "")}
+                      {isAdviser ? "adviser" : locked ? "has scores" : state.programs.find((p) => p.id === u.program_id)?.code ?? "All courses"}
                     </span>
                   </label>
                 </li>

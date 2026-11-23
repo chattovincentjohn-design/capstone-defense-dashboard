@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, canAdminProgram, listProjects, programProblem, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
-import { seedBundles, seedGrading, seedRubric, USERS } from "../mock-data";
+import { PROGRAMS, seedBundles, seedGrading, seedRubric, USERS } from "../mock-data";
+
+const BSIT = "prog-bsit";
 import type { State } from "../store";
 
 function state(): State {
@@ -16,6 +18,7 @@ function state(): State {
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
     grading: seedGrading(),
+    programs: PROGRAMS,
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
     currentUserId: "u-admin",
     hydrated: true,
@@ -23,6 +26,7 @@ function state(): State {
 }
 
 const draft = (over: Partial<ScheduleDraft> = {}): ScheduleDraft => ({
+  programId: BSIT,
   projectId: "new",
   newProject: {
     title: "Barangay Health Records", group_label: "Group 9", adviser_id: "u-reyes", academic_year: "2026-2027",
@@ -76,7 +80,7 @@ describe("scheduleSession / update / delete", () => {
   it("creates a session with a rubric snapshot and attendance", () => {
     const { state: s, sessionId } = scheduleSession(state(), draft(), USERS);
     const b = s.bundles[sessionId];
-    expect(b.criteria.map((c) => c.id).sort()).toEqual(activeRubric(s.rubric, "title").map((c) => c.id).sort());
+    expect(b.criteria.map((c) => c.id).sort()).toEqual(activeRubric(s.rubric, BSIT, "title").map((c) => c.id).sort());
     expect(b.assignments.find((a) => a.panel_role === "chair")?.faculty_id).toBe("u-ramos");
     expect(b.minutes.attendance_json).toHaveLength(5); // 3 panel + adviser + 1 proponent
     expect(s.order.at(-1)).toBe(sessionId);
@@ -98,30 +102,30 @@ describe("scheduleSession / update / delete", () => {
 describe("saveStageRubric", () => {
   it("rejects weights that do not total 100", () => {
     const s = state();
-    const drafts = activeRubric(s.rubric, "final").map((c) => (c.id === "c-f-g1" ? { ...c, weight_percentage: 40 } : c));
+    const drafts = activeRubric(s.rubric, BSIT, "final").map((c) => (c.id === "c-f-g1" ? { ...c, weight_percentage: 40 } : c));
     expect(rubricProblems(drafts)[0]).toMatch(/105%/);
-    expect(() => saveStageRubric(s, "final", drafts)).toThrow();
+    expect(() => saveStageRubric(s, BSIT, "final", drafts)).toThrow();
   });
 
   it("versions in-use criteria and leaves scored sessions frozen", () => {
     const s = state();
-    const drafts = activeRubric(s.rubric, "final").map((c) =>
+    const drafts = activeRubric(s.rubric, BSIT, "final").map((c) =>
       c.id === "c-f-g1" ? { ...c, weight_percentage: 30 } : c.id === "c-f-g4" ? { ...c, weight_percentage: 20 } : c);
-    const { state: s2, report } = saveStageRubric(s, "final", drafts);
+    const { state: s2, report } = saveStageRubric(s, BSIT, "final", drafts);
     expect(report.versioned).toBe(2);
     expect(report.frozen).toEqual(["sess-g4-final"]);
     expect(s2.rubric.find((c) => c.id === "c-f-g1")!.is_active).toBe(false);
     expect(s2.bundles["sess-g4-final"].criteria.find((c) => c.id === "c-f-g1")!.weight_percentage).toBe(35);
-    expect(activeRubric(s2.rubric, "final").find((c) => c.criterion_name === "System Functionality")!.weight_percentage).toBe(30);
+    expect(activeRubric(s2.rubric, BSIT, "final").find((c) => c.criterion_name === "System Functionality")!.weight_percentage).toBe(30);
   });
 
   it("syncs unscored sessions and supports add/remove", () => {
     const s = state();
-    const drafts = activeRubric(s.rubric, "proposal")
+    const drafts = activeRubric(s.rubric, BSIT, "proposal")
       .filter((c) => c.id !== "c-p-g4")
       .map((c) => (c.id === "c-p-g1" ? { ...c, weight_percentage: 25 } : c));
     drafts.push({ id: "new-1", stage: "proposal", scope: "group", criterion_name: "Ethics & Data Privacy", description: "", weight_percentage: 20, max_score: 5, sort_order: 5 });
-    const { state: s2, report } = saveStageRubric(s, "proposal", drafts);
+    const { state: s2, report } = saveStageRubric(s, BSIT, "proposal", drafts);
     // Group 7 is unscored, so its criteria are edited in place (no needless versions)
     expect(report).toMatchObject({ added: 1, retired: 1, updated: 1, versioned: 0, synced: ["sess-g7-proposal"] });
     const names = s2.bundles["sess-g7-proposal"].criteria.map((c) => c.criterion_name);
@@ -152,24 +156,24 @@ describe("per-stage grade blend", () => {
 
   it("applies a new blend to unscored sessions only", () => {
     const s = state();
-    const { state: s2, report } = saveStageRubric(s, "final", activeRubric(s.rubric, "final"), { groupWeight: 70, individualWeight: 30 });
+    const { state: s2, report } = saveStageRubric(s, BSIT, "final", activeRubric(s.rubric, BSIT, "final"), { groupWeight: 70, individualWeight: 30 });
     expect(report.blendChanged).toBe(true);
-    expect(s2.grading.final).toEqual({ groupWeight: 70, individualWeight: 30 });
+    expect(s2.grading[BSIT].final).toEqual({ groupWeight: 70, individualWeight: 30 });
     // Group 4 is scored → keeps 60/40, so its grades do not move
     expect(s2.bundles["sess-g4-final"].session).toMatchObject({ group_weight: 60, individual_weight: 40 });
     expect(consolidate(s2.bundles["sess-g4-final"]).overallPercent).toBe(consolidate(s.bundles["sess-g4-final"]).overallPercent);
 
-    const { state: s3 } = saveStageRubric(s, "proposal", activeRubric(s.rubric, "proposal"), { groupWeight: 50, individualWeight: 50 });
+    const { state: s3 } = saveStageRubric(s, BSIT, "proposal", activeRubric(s.rubric, BSIT, "proposal"), { groupWeight: 50, individualWeight: 50 });
     expect(s3.bundles["sess-g7-proposal"].session).toMatchObject({ group_weight: 50, individual_weight: 50 });
   });
 
   it("rejects an invalid blend on save", () => {
     const s = state();
-    expect(() => saveStageRubric(s, "final", activeRubric(s.rubric, "final"), { groupWeight: 80, individualWeight: 30 })).toThrow(/110%/);
+    expect(() => saveStageRubric(s, BSIT, "final", activeRubric(s.rubric, BSIT, "final"), { groupWeight: 80, individualWeight: 30 })).toThrow(/110%/);
   });
 
   it("stamps the stage blend on new sessions and on stage change", () => {
-    const s = { ...state(), grading: { ...seedGrading(), title: { groupWeight: 80, individualWeight: 20 }, proposal: { groupWeight: 50, individualWeight: 50 } } };
+    const s = { ...state(), grading: { ...seedGrading(), [BSIT]: { ...seedGrading()[BSIT], title: { groupWeight: 80, individualWeight: 20 }, proposal: { groupWeight: 50, individualWeight: 50 } } } };
     const { state: s2, sessionId } = scheduleSession(s, draft(), USERS);
     expect(s2.bundles[sessionId].session).toMatchObject({ group_weight: 80, individual_weight: 20 });
     const projectId = s2.bundles[sessionId].project.id;
@@ -178,7 +182,7 @@ describe("per-stage grade blend", () => {
   });
 
   it("blocks scheduling when the stage blend is invalid", () => {
-    const s = { ...state(), grading: { ...seedGrading(), title: { groupWeight: 90, individualWeight: 20 } } };
+    const s = { ...state(), grading: { ...seedGrading(), [BSIT]: { ...seedGrading()[BSIT], title: { groupWeight: 90, individualWeight: 20 } } } };
     expect(errors(s, draft()).join()).toMatch(/grade blend is not ready/);
   });
 });
@@ -203,7 +207,7 @@ describe("accounts", () => {
   it("stops coordinators from disabling or demoting themselves", () => {
     const admin = existing.find((a) => a.id === "u-admin")!;
     expect(accountChangeProblem("u-admin", admin, { active: false })).toMatch(/disable your own/);
-    expect(accountChangeProblem("u-admin", admin, { role: "panelist" })).toMatch(/own Coordinator role/);
+    expect(accountChangeProblem("u-admin", admin, { role: "panelist" })).toMatch(/own administrator role/);
     expect(accountChangeProblem("u-admin", admin, { role: "admin" })).toBeNull();
     expect(accountChangeProblem("u-admin", existing.find((a) => a.id === "u-diaz")!, { active: false })).toBeNull();
   });
@@ -285,5 +289,49 @@ describe("groups & student privacy", () => {
     expect(c.stats.some((st) => st.student && st.student.id !== "m-g4-1")).toBe(false);
     const adviser = resolveViewer(USERS.find((u) => u.id === "u-reyes")!, b);
     expect(gradeVisibleMembers(adviser, b)).toHaveLength(3);
+  });
+});
+
+describe("courses (programs)", () => {
+  const BSED = "prog-bsed";
+  it("Coordinators manage only their own course; super admins manage all", () => {
+    expect(canAdminProgram({ role: "admin", program_id: BSIT }, BSIT)).toBe(true);
+    expect(canAdminProgram({ role: "admin", program_id: BSIT }, BSED)).toBe(false);
+    expect(canAdminProgram({ role: "superadmin", program_id: null }, BSED)).toBe(true);
+    expect(canAdminProgram({ role: "panelist", program_id: BSIT }, BSIT)).toBe(false);
+  });
+
+  it("validates course codes and names", () => {
+    expect(programProblem({ code: "bshm", name: "BS Hospitality Management" }, PROGRAMS)).toBeNull();
+    expect(programProblem({ code: "BSIT", name: "Duplicate" }, PROGRAMS)).toMatch(/already exists/);
+    expect(programProblem({ code: "BSIT", name: "Renamed" }, PROGRAMS, BSIT)).toBeNull();
+    expect(programProblem({ code: "B", name: "x" }, PROGRAMS)).toMatch(/2–12/);
+    expect(programProblem({ code: "BSX", name: " " }, PROGRAMS)).toMatch(/name is required/);
+  });
+
+  it("each course has its own rubric; editing one leaves the others alone", () => {
+    const s = state();
+    expect(activeRubric(s.rubric, BSED, "final")).toHaveLength(6);
+    const drafts = activeRubric(s.rubric, BSED, "final").map((c) => (c.criterion_name === "System Functionality"
+      ? { ...c, criterion_name: "Instructional Materials Quality" } : c));
+    const { state: s2 } = saveStageRubric(s, BSED, "final", drafts, { groupWeight: 50, individualWeight: 50 });
+    expect(activeRubric(s2.rubric, BSED, "final").map((c) => c.criterion_name)).toContain("Instructional Materials Quality");
+    expect(activeRubric(s2.rubric, BSIT, "final").map((c) => c.criterion_name)).toContain("System Functionality");
+    expect(s2.grading[BSED].final).toEqual({ groupWeight: 50, individualWeight: 50 });
+    expect(s2.grading[BSIT].final).toEqual({ groupWeight: 60, individualWeight: 40 });
+    // BSIT's scored Group 4 untouched
+    expect(s2.bundles["sess-g4-final"].criteria).toEqual(s.bundles["sess-g4-final"].criteria);
+  });
+
+  it("a new group in BS Education uses BS Education's rubric and split", () => {
+    const s0 = state();
+    const { state: s } = saveStageRubric(s0, BSED, "title", activeRubric(s0.rubric, BSED, "title"), { groupWeight: 70, individualWeight: 30 });
+    const { state: s2, sessionId } = scheduleSession(s, draft({ programId: BSED, stage: "title" }), USERS);
+    const b = s2.bundles[sessionId];
+    expect(b.project.program_id).toBe(BSED);
+    expect(b.criteria.every((c) => c.program_id === BSED)).toBe(true);
+    expect(b.session).toMatchObject({ group_weight: 70, individual_weight: 30 });
+    expect(listProjects(s2, BSED).map((p) => p.project.group_label)).toEqual(["Group 9"]);
+    expect(listProjects(s2, BSIT)).toHaveLength(2);
   });
 });

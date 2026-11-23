@@ -18,8 +18,8 @@ declare
 begin
   if u_ramos is null then raise exception 'Create the demo accounts first'; end if;
 
-  insert into public.capstone_projects (title, group_label, abstract, manuscript_url, demo_url, adviser_id, academic_year)
-  values ('IoT-Based Smart Agriculture System', 'Group 4',
+  insert into public.capstone_projects (program_id, title, group_label, abstract, manuscript_url, demo_url, adviser_id, academic_year)
+  values ((select id from public.programs where code = 'BSIT'), 'IoT-Based Smart Agriculture System', 'Group 4',
           'A low-cost sensor network (soil moisture, pH, temperature) with LoRa uplink and an offline-first mobile dashboard that automates irrigation scheduling for smallholder rice farms.',
           '/sample-manuscript.pdf', 'https://example.com/smart-agri-demo', u_reyes, '2026-2027')
   returning id into p4;
@@ -27,8 +27,8 @@ begin
   insert into public.project_members (project_id, student_name, student_number) values (p4, 'Mark Bautista', '2022-00533') returning id into m42;
   insert into public.project_members (project_id, student_name, student_number) values (p4, 'Kyla Mendoza', '2022-00691') returning id into m43;
 
-  insert into public.capstone_projects (title, group_label, abstract, manuscript_url, adviser_id, academic_year)
-  values ('AI-Assisted Enrollment Queue Management System', 'Group 7',
+  insert into public.capstone_projects (program_id, title, group_label, abstract, manuscript_url, adviser_id, academic_year)
+  values ((select id from public.programs where code = 'BSIT'), 'AI-Assisted Enrollment Queue Management System', 'Group 7',
           'A queue forecasting and SMS-notification platform that predicts registrar load and assigns time slots during enrollment week.',
           '/sample-manuscript.pdf', u_reyes, '2026-2027')
   returning id into p7;

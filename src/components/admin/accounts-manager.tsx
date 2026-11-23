@@ -12,14 +12,16 @@ import { useStore } from "@/lib/store";
 import { ROLE_LABEL, type Account, type AccountInput, type UserRole } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 
-const ROLES: UserRole[] = ["admin", "chair", "panelist", "secretary", "adviser", "student"];
+const COURSE_ROLES: UserRole[] = ["admin", "chair", "panelist", "secretary", "adviser", "student"];
 const errText = (e: unknown) => (e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
 const BLANK: AccountInput = { full_name: "", email: "", role: "panelist", department: "" };
 
 type Credential = { kind: "created" | "reset"; name: string; email: string; password: string };
 
-export function AccountsManager() {
+export function AccountsManager({ programId }: { programId: string }) {
   const { ops, currentUser, mode } = useStore();
+  const isSuper = currentUser.role === "superadmin";
+  const ROLES: UserRole[] = isSuper ? ["superadmin", ...COURSE_ROLES] : COURSE_ROLES;
   const [accounts, setAccounts] = React.useState<Account[] | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
@@ -60,15 +62,17 @@ export function AccountsManager() {
   if (!accounts) return <p className="text-sm text-muted-foreground">Loading accounts…</p>;
 
   const q = query.trim().toLowerCase();
-  const shown = accounts.filter((a) =>
+  // This course's people; super admins also see the other super admins here.
+  const inCourse = accounts.filter((a) => a.program_id === programId || (isSuper && a.role === "superadmin"));
+  const shown = inCourse.filter((a) =>
     (roleFilter === "all" || a.role === roleFilter) &&
     (!q || a.full_name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || (a.department ?? "").toLowerCase().includes(q)));
-  const disabled = accounts.filter((a) => !a.is_active).length;
+  const disabled = inCourse.filter((a) => !a.is_active).length;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{accounts.length} accounts{disabled ? ` · ${disabled} disabled` : ""}</p>
+        <p className="text-sm text-muted-foreground">{inCourse.length} accounts in this course{disabled ? ` · ${disabled} disabled` : ""}</p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="relative">
             <span className="sr-only">Search accounts</span>
@@ -92,9 +96,9 @@ export function AccountsManager() {
       )}
 
       {showForm && (
-        <CreateAccountForm existing={accounts} onCancel={() => setShowForm(false)}
+        <CreateAccountForm existing={accounts} roles={ROLES} onCancel={() => setShowForm(false)}
           onCreate={async (input) => {
-            const { account, tempPassword } = await ops.createAccount(input);
+            const { account, tempPassword } = await ops.createAccount({ ...input, program_id: input.role === "superadmin" ? null : programId });
             setShowForm(false);
             setCredential({ kind: "created", name: account.full_name, email: account.email, password: tempPassword });
             await reload();
@@ -129,8 +133,8 @@ export function AccountsManager() {
                     </td>
                     <td className="px-2 py-2.5">
                       <NativeSelect className="h-8 w-44 text-xs" aria-label={`Role for ${a.full_name}`} value={a.role}
-                        disabled={busy || (self && a.role === "admin")}
-                        title={self && a.role === "admin" ? "You cannot remove your own Coordinator role" : undefined}
+                        disabled={busy || (self && (a.role === "admin" || a.role === "superadmin"))}
+                        title={self && (a.role === "admin" || a.role === "superadmin") ? "You cannot change your own administrator role" : undefined}
                         onChange={(e) => {
                           const role = e.target.value as UserRole;
                           const problem = accountChangeProblem(currentUser.id, a, { role });
@@ -205,8 +209,8 @@ function DepartmentField({ account, disabled, onSave }: { account: Account; disa
   );
 }
 
-function CreateAccountForm({ existing, onCreate, onCancel }: {
-  existing: Account[]; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
+function CreateAccountForm({ existing, roles: ROLES, onCreate, onCancel }: {
+  existing: Account[]; roles: UserRole[]; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
 }) {
   const [f, setF] = React.useState<AccountInput>(BLANK);
   const [attempted, setAttempted] = React.useState(false);
@@ -255,7 +259,8 @@ function CreateAccountForm({ existing, onCreate, onCancel }: {
               <Input id="acc-dept" value={f.department} onChange={(e) => set("department", e.target.value)} placeholder="College of Computing Studies" />
             </div>
           </div>
-          {f.role === "admin" && <p className="text-xs text-warning">Coordinators can manage every schedule, rubric and account.</p>}
+          {f.role === "admin" && <p className="text-xs text-warning">Course Coordinators manage this course&apos;s schedule, groups, rubric and accounts.</p>}
+          {f.role === "superadmin" && <p className="text-xs text-warning">Super admins manage every course, including Coordinators and courses themselves.</p>}
           {((attempted && problems.length > 0) || serverError) && (
             <ul className="space-y-1 text-xs text-destructive" aria-live="polite">
               {attempted && problems.map((p) => <li key={p} className="flex gap-1.5"><XCircle className="mt-px size-3.5 shrink-0" />{p}</li>)}

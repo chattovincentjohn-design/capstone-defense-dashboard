@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/lib/store";
 import { TIME_ZONE } from "@/lib/utils";
 
 export function PrintShell({ sessionId, draft, children }: { sessionId: string; draft: boolean; children: React.ReactNode }) {
@@ -26,12 +27,17 @@ export function PrintShell({ sessionId, draft, children }: { sessionId: string; 
   );
 }
 
-export function DocHeader({ title, subtitle }: { title: string; subtitle: string }) {
+/** Document letterhead; the course line comes from the defense's course (program). */
+export function DocHeader({ title, subtitle, programId }: { title: string; subtitle: string; programId?: string }) {
+  const { state } = useStore();
+  const program = state.programs.find((p) => p.id === programId);
   return (
     <header className="mb-5 text-center">
       <p className="text-[10pt] uppercase tracking-wide">Republic of the Philippines</p>
       <p className="font-bold uppercase">[Institution Name]</p>
-      <p className="text-[10pt]">College of Computing Studies · Office of the Capstone Coordinator</p>
+      <p className="text-[10pt]">
+        {program ? `${program.name} · Office of the ${program.project_term} Coordinator` : "Office of the Coordinator"}
+      </p>
       <hr className="my-3 border-black" />
       <h1 className="text-[14pt] font-bold uppercase">{title}</h1>
       <p className="text-[10pt]">{subtitle}</p>

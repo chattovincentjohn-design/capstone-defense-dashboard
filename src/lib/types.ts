@@ -1,6 +1,6 @@
 // Domain types — mirror supabase/migrations/*_capstone_defense.sql 1:1.
 
-export type UserRole = "admin" | "chair" | "panelist" | "secretary" | "adviser" | "student";
+export type UserRole = "superadmin" | "admin" | "chair" | "panelist" | "secretary" | "adviser" | "student";
 export type DefenseStage = "title" | "proposal" | "final";
 export type Verdict = "passed" | "passed_minor_revisions" | "passed_major_revisions" | "re_defense";
 export type PanelRole = "chair" | "member";
@@ -8,12 +8,22 @@ export type RubricScope = "group" | "individual";
 export type CommentCategory = "documentation" | "system_ui" | "database_architecture" | "methodology";
 export type CommentSeverity = "mandatory" | "suggestion";
 
+/** A course/program (BSIT, BS Education, ...) with its own Coordinator, rubric and grade split. */
+export interface Program {
+  id: string;
+  code: string;
+  name: string;
+  project_term: "Capstone" | "Thesis" | "Research";
+}
+
 export interface User {
   id: string;
   full_name: string;
   email: string;
   role: UserRole;
   department: string | null;
+  /** Course the person belongs to; null for super admins. */
+  program_id?: string | null;
 }
 
 /** A sign-in account as the Coordinator sees it. */
@@ -28,6 +38,8 @@ export interface AccountInput {
   full_name: string;
   role: UserRole;
   department: string;
+  /** Course for the account; ignored for super admins. */
+  program_id?: string | null;
 }
 
 export interface MemberInput {
@@ -45,6 +57,7 @@ export interface CapstoneProject {
   demo_url: string | null;
   adviser_id: string | null;
   academic_year: string;
+  program_id: string;
 }
 
 export interface ProjectMember {
@@ -98,6 +111,7 @@ export interface RubricCriterion {
   weight_percentage: number;
   max_score: number;
   sort_order: number;
+  program_id?: string;   // templates belong to a course; session snapshots may omit it
   is_active?: boolean; // templates only; session snapshots omit it
 }
 
@@ -198,7 +212,8 @@ export const SEVERITY_LABEL: Record<CommentSeverity, string> = {
 };
 
 export const ROLE_LABEL: Record<UserRole, string> = {
-  admin: "Capstone Coordinator",
+  superadmin: "Super Admin",
+  admin: "Course Coordinator",
   chair: "Defense Chair",
   panelist: "Panel Member",
   secretary: "Defense Secretary",

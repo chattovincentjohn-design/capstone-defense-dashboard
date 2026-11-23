@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RoleSwitcher } from "@/components/defense/role-switcher";
+import { canAdminProgram, isAnyAdmin } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { STAGE_LABEL, VERDICT_LABEL } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
@@ -13,7 +14,7 @@ export default function Home() {
   const { mode, state, reset, currentUser } = useStore();
   const sessions = state.order.map((id) => state.bundles[id]);
   const mine = sessions.filter((b) =>
-    currentUser.role === "admin" ||
+    canAdminProgram(currentUser, b.project.program_id) ||
     b.assignments.some((a) => a.faculty_id === currentUser.id) ||
     b.session.secretary_id === currentUser.id ||
     b.project.adviser_id === currentUser.id ||
@@ -29,8 +30,8 @@ export default function Home() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {currentUser.role === "admin" && (
-            <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> Coordinator console</Link></Button>
+          {isAnyAdmin(currentUser) && (
+            <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> {currentUser.role === "superadmin" ? "Super admin console" : "Coordinator console"}</Link></Button>
           )}
           <RoleSwitcher />
         </div>
@@ -48,6 +49,7 @@ export default function Home() {
             <Link key={b.session.id} href={`/defense/${b.session.id}`}
               className="block rounded-md border bg-background/40 p-4 text-foreground transition-colors hover:border-primary">
               <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="muted">{state.programs.find((p) => p.id === b.project.program_id)?.code ?? "—"}</Badge>
                 <Badge variant="outline">{STAGE_LABEL[b.session.stage]}</Badge>
                 <span className="font-semibold">{b.project.group_label}: {b.project.title}</span>
                 {b.session.verdict

@@ -17,7 +17,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
 
   return (
     <PrintShell sessionId={session.id} draft={!session.is_locked}>
-      <DocHeader title="Official Consolidated Rating Sheet" subtitle={`${STAGE_LABEL[session.stage]} · A.Y. ${project.academic_year}`} />
+      <DocHeader title="Official Consolidated Rating Sheet" subtitle={`${STAGE_LABEL[session.stage]} · A.Y. ${project.academic_year}`} programId={project.program_id} />
       <MetaTable rows={[
         ["Project Title", <b key="t">{project.title}</b>],
         ["Group", project.group_label],
