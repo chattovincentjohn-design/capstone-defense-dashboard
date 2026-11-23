@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, cleanRegistration, codeMatches, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -17,6 +17,8 @@ function state(): State {
     rubric: seedRubric(),
     grading: seedGrading(),
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
+    registrations: [],
+    registrationSettings: { is_open: true, access_code: "SCS-2026" },
     currentUserId: "u-admin",
     hydrated: true,
   };
@@ -304,5 +306,52 @@ describe("groups & student privacy", () => {
     expect(c.stats.some((st) => st.student && st.student.id !== "m-g4-1")).toBe(false);
     const adviser = resolveViewer(USERS.find((u) => u.id === "u-reyes")!, b);
     expect(gradeVisibleMembers(adviser, b)).toHaveLength(3);
+  });
+});
+
+describe("group self-registration", () => {
+  const good = {
+    group_label: "Group 9", title: "Barangay Health Records System", academic_year: "2026-2027",
+    adviser_id: "u-reyes", adviser_name: "", manuscript_url: "https://drive.google.com/x", demo_url: "", abstract: "",
+    contact_email: "Leader@JHCSC.edu.ph",
+    members: [
+      { student_name: "Ana Cruz", student_number: "2022-00811", email: "acruz@jhcsc.edu.ph" },
+      { student_name: "Ben Ramos", student_number: "2022-00812", email: "bramos@jhcsc.edu.ph" },
+    ],
+  };
+  it("accepts a complete registration", () => {
+    expect(registrationProblems(good)).toEqual([]);
+  });
+  it("flags missing and malformed fields", () => {
+    const p = registrationProblems({ ...good, title: " ", academic_year: "2026-2028", adviser_id: null, contact_email: "x",
+      manuscript_url: "drive.google.com", members: [{ student_name: "", student_number: "", email: "nope" }] });
+    expect(p.join(" ")).toMatch(/title/);
+    expect(p.join(" ")).toMatch(/consecutive/);
+    expect(p.join(" ")).toMatch(/adviser/);
+    expect(p.join(" ")).toMatch(/contact email/);
+    expect(p.join(" ")).toMatch(/https/);
+    expect(p.join(" ")).toMatch(/Member 1: full name/);
+    expect(p.join(" ")).toMatch(/student number is required/);
+  });
+  it("rejects duplicate members and empty groups", () => {
+    expect(registrationProblems({ ...good, members: [good.members[0], { ...good.members[1], student_number: "2022-00811" }] }).join(" "))
+      .toMatch(/listed twice/);
+    expect(registrationProblems({ ...good, members: [] })).toContain("Add at least one member.");
+  });
+  it("accepts an unlisted adviser by name", () => {
+    expect(registrationProblems({ ...good, adviser_id: null, adviser_name: "Dr. New Adviser" })).toEqual([]);
+  });
+  it("cleans input and formats members for the schedule form", () => {
+    const c = cleanRegistration({ ...good, title: "  Title  ", adviser_name: "ignored" });
+    expect(c.title).toBe("Title");
+    expect(c.contact_email).toBe("leader@jhcsc.edu.ph");
+    expect(c.adviser_name).toBe("");
+    expect(membersToText(c.members)).toBe("Ana Cruz, 2022-00811, acruz@jhcsc.edu.ph\nBen Ramos, 2022-00812, bramos@jhcsc.edu.ph");
+    expect(parseMembers(membersToText(c.members))).toEqual(c.members);
+  });
+  it("matches codes regardless of case and spaces", () => {
+    expect(codeMatches(" scs-2026 ", "SCS-2026")).toBe(true);
+    expect(codeMatches("SCS-2025", "SCS-2026")).toBe(false);
+    expect(codeMatches("", "")).toBe(false);
   });
 });

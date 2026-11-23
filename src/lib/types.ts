@@ -206,3 +206,40 @@ export const ROLE_LABEL: Record<UserRole, string> = {
   adviser: "Adviser",
   student: "Proponent",
 };
+
+// ---------------------------------------------------------------------------
+// Group self-registration (public /register page → Coordinator review)
+// ---------------------------------------------------------------------------
+export type RegistrationStatus = "pending" | "scheduled" | "rejected";
+
+export interface RegistrationInput {
+  group_label: string;
+  title: string;
+  academic_year: string;
+  /** A CDEMS faculty account, or null with adviser_name filled in when not listed. */
+  adviser_id: string | null;
+  adviser_name: string;
+  members: MemberInput[];
+  manuscript_url: string;
+  demo_url: string;
+  abstract: string;
+  contact_email: string;
+}
+
+export interface GroupRegistration extends RegistrationInput {
+  id: string;
+  status: RegistrationStatus;
+  created_at: string;
+}
+
+export interface RegistrationSettings {
+  is_open: boolean;
+  access_code: string;
+}
+
+/** What the public form may know before submitting. */
+export interface RegistrationFormInfo {
+  open: boolean;
+  valid: boolean;
+  advisers: { id: string; full_name: string }[];
+}

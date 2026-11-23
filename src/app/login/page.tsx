@@ -69,6 +69,9 @@ export default function LoginPage() {
               <Button className="w-full" type="submit" disabled={busy}><LogIn /> {busy ? "Signing in…" : "Sign in"}</Button>
               {msg && <p role="alert" className="text-xs text-destructive">{msg}</p>}
               <p className="text-xs text-muted-foreground">Accounts are issued by the Capstone Coordinator.</p>
+              <p className="text-xs text-muted-foreground">
+                Group leader? <Link href="/register" className="text-primary hover:underline">Register your capstone group</Link>
+              </p>
             </form>
           )}
         </CardContent>

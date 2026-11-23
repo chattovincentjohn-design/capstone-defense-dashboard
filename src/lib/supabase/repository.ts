@@ -306,3 +306,47 @@ export async function createMemberAccount(sb: SupabaseClient, memberId: string) 
   const row = (data as { user_id: string; temp_password: string | null; linked_existing: boolean }[])[0];
   return { userId: row.user_id, tempPassword: row.temp_password, linkedExisting: row.linked_existing };
 }
+
+// ---------------------------------------------------------------------------
+// Group self-registration (see migrations/*_group_registration.sql)
+// ---------------------------------------------------------------------------
+type Reg = import("../types").GroupRegistration;
+
+export async function registrationInfo(sb: SupabaseClient, code: string): Promise<import("../types").RegistrationFormInfo> {
+  const { data, error } = await sb.rpc("registration_form_info", { p_code: code });
+  if (error) throw error;
+  return data as import("../types").RegistrationFormInfo;
+}
+
+export async function submitRegistration(sb: SupabaseClient, code: string, input: import("../types").RegistrationInput) {
+  const { error } = await sb.rpc("submit_group_registration", { p_code: code, p_reg: input });
+  if (error) throw error;
+}
+
+export async function listRegistrations(sb: SupabaseClient): Promise<Reg[]> {
+  const { data, error } = await sb.from("group_registrations").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as Reg[];
+}
+
+export async function getRegistrationSettings(sb: SupabaseClient): Promise<import("../types").RegistrationSettings> {
+  const { data, error } = await sb.from("registration_settings").select("is_open, access_code").eq("id", 1).single();
+  if (error) throw error;
+  return data as import("../types").RegistrationSettings;
+}
+
+export async function saveRegistrationSettings(sb: SupabaseClient, s: import("../types").RegistrationSettings) {
+  const { error } = await sb.from("registration_settings")
+    .update({ is_open: s.is_open, access_code: s.access_code.trim(), updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) throw error;
+}
+
+export async function setRegistrationStatus(sb: SupabaseClient, id: string, status: import("../types").RegistrationStatus) {
+  const { error } = await sb.from("group_registrations").update({ status }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteRegistration(sb: SupabaseClient, id: string) {
+  const { error } = await sb.from("group_registrations").delete().eq("id", id);
+  if (error) throw error;
+}

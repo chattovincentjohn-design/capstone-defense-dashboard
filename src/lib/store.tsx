@@ -8,14 +8,15 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, assignableRoles, canManageAccount, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, saveStageRubric,
+  accountChangeProblem, accountProblems, ADVISER_ROLES, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  Account, AccountInput, DefenseMinutes, DefenseStage, MemberInput, ProjectMember, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
+  Account, AccountInput, DefenseMinutes, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
 
@@ -30,6 +31,9 @@ export interface State {
   order: string[];
   /** Demo only: the editable cast. Live mode loads accounts on demand from the database. */
   accounts: Account[];
+  /** Demo only: group self-registrations and their settings (live mode loads these on demand). */
+  registrations: GroupRegistration[];
+  registrationSettings: RegistrationSettings;
   currentUserId: string;
   hydrated: boolean;
 }
@@ -70,6 +74,15 @@ export interface StoreOps {
   updateMember(memberId: string, input: MemberInput): Promise<void>;
   removeMember(memberId: string): Promise<void>;
   createMemberAccounts(projectId: string): Promise<MemberAccountResult[]>;
+  /** Public (signed-out) group registration. */
+  registrationInfo(code: string): Promise<RegistrationFormInfo>;
+  submitRegistration(code: string, input: RegistrationInput): Promise<void>;
+  /** Coordinator review of registrations. */
+  listRegistrations(): Promise<GroupRegistration[]>;
+  getRegistrationSettings(): Promise<RegistrationSettings>;
+  saveRegistrationSettings(settings: RegistrationSettings): Promise<void>;
+  setRegistrationStatus(id: string, status: RegistrationStatus): Promise<void>;
+  deleteRegistration(id: string): Promise<void>;
 }
 
 export interface StoreCtx {
@@ -124,6 +137,8 @@ function initial(): State {
     rubric: seedRubric(),
     grading: seedGrading(),
     accounts: USERS.map((u) => ({ ...u, is_active: true, created_at: null, last_sign_in_at: null })),
+    registrations: [],
+    registrationSettings: { is_open: true, access_code: "SCS-2026" },
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -186,7 +201,8 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
-        accounts: state.accounts, currentUserId: state.currentUserId,
+        accounts: state.accounts, registrations: state.registrations, registrationSettings: state.registrationSettings,
+        currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
   }, [state]);
@@ -371,6 +387,44 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         }
         replaceAll(s);
         return results;
+      },
+
+      // ---- Group self-registration (mirrors the database RPCs) ----------------
+      async registrationInfo(code) {
+        const s = stateRef.current;
+        const open = s.registrationSettings.is_open && !!s.registrationSettings.access_code;
+        const valid = open && codeMatches(code, s.registrationSettings.access_code);
+        const advisers = valid ? s.accounts.filter((a) => a.is_active && ADVISER_ROLES.includes(a.role))
+          .map((a) => ({ id: a.id, full_name: a.full_name })).sort((a, b) => a.full_name.localeCompare(b.full_name)) : [];
+        return { open, valid, advisers };
+      },
+      async submitRegistration(code, input) {
+        const s = stateRef.current;
+        if (!s.registrationSettings.is_open || !s.registrationSettings.access_code) throw new Error("Group registration is closed.");
+        if (!codeMatches(code, s.registrationSettings.access_code)) throw new Error("The registration code is incorrect.");
+        if (input.adviser_id && !s.accounts.some((a) => a.id === input.adviser_id && ADVISER_ROLES.includes(a.role))) throw new Error("Choose an adviser from the list.");
+        const problems = registrationProblems(input);
+        if (problems.length) throw new Error(problems.join(" "));
+        const reg: GroupRegistration = { ...cleanRegistration(input), id: uid("reg"), status: "pending", created_at: new Date().toISOString() };
+        replaceAll({ ...s, registrations: [reg, ...s.registrations] });
+      },
+      async listRegistrations() {
+        return [...stateRef.current.registrations].sort((a, b) => b.created_at.localeCompare(a.created_at));
+      },
+      async getRegistrationSettings() {
+        return stateRef.current.registrationSettings;
+      },
+      async saveRegistrationSettings(settings) {
+        if (settings.is_open && settings.access_code.trim().length < 4) throw new Error("Set a registration code of at least 4 characters before opening registration.");
+        replaceAll({ ...stateRef.current, registrationSettings: { is_open: settings.is_open, access_code: settings.access_code.trim() } });
+      },
+      async setRegistrationStatus(id, status) {
+        const s = stateRef.current;
+        replaceAll({ ...s, registrations: s.registrations.map((r) => (r.id === id ? { ...r, status } : r)) });
+      },
+      async deleteRegistration(id) {
+        const s = stateRef.current;
+        replaceAll({ ...s, registrations: s.registrations.filter((r) => r.id !== id) });
       },
     };
   }, []);

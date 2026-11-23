@@ -8,10 +8,10 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  assignmentHasScores, FACULTY_ROLES, fromManilaInput, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
+  assignmentHasScores, FACULTY_ROLES, fromManilaInput, membersToText, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
 } from "@/lib/admin";
 import type { State } from "@/lib/store";
-import { ROLE_LABEL, STAGE_LABEL, type DefenseStage, type SessionBundle, type User } from "@/lib/types";
+import { ROLE_LABEL, STAGE_LABEL, type DefenseStage, type GroupRegistration, type SessionBundle, type User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FormState {
@@ -32,7 +32,7 @@ interface FormState {
   memberIds: string[];
 }
 
-function initialForm(editing: SessionBundle | undefined, projects: ReturnType<typeof listProjects>): FormState {
+function initialForm(editing: SessionBundle | undefined, projects: ReturnType<typeof listProjects>, prefill?: GroupRegistration): FormState {
   if (editing) {
     return {
       projectId: editing.project.id, title: "", groupLabel: "", adviserId: "", academicYear: editing.project.academic_year,
@@ -43,6 +43,14 @@ function initialForm(editing: SessionBundle | undefined, projects: ReturnType<ty
       memberIds: editing.assignments.filter((a) => a.panel_role === "member").map((a) => a.faculty_id),
     };
   }
+  if (prefill) {
+    return {
+      projectId: "new", title: prefill.title, groupLabel: prefill.group_label, adviserId: prefill.adviser_id ?? "",
+      academicYear: prefill.academic_year, membersText: membersToText(prefill.members), manuscriptUrl: prefill.manuscript_url,
+      demoUrl: prefill.demo_url, abstract: prefill.abstract,
+      stage: "title", when: "", room: "", secretaryId: "", chairId: "", memberIds: [],
+    };
+  }
   return {
     projectId: projects[0]?.project.id ?? "new", title: "", groupLabel: "", adviserId: "", academicYear: "2026-2027",
     membersText: "", manuscriptUrl: "", demoUrl: "", abstract: "",
@@ -50,16 +58,18 @@ function initialForm(editing: SessionBundle | undefined, projects: ReturnType<ty
   };
 }
 
-export function ScheduleForm({ state, users, editing, busy = false, onSubmit, onCancel }: {
+export function ScheduleForm({ state, users, editing, prefill, busy = false, onSubmit, onCancel }: {
   state: State;
   users: User[];
   editing?: SessionBundle;
+  /** A group's self-registration to fill in the new-project fields from. */
+  prefill?: GroupRegistration;
   busy?: boolean;
   onSubmit: (d: ScheduleDraft) => Promise<string | null>; // resolves to an error message or null
   onCancel: () => void;
 }) {
   const projects = React.useMemo(() => listProjects(state), [state]);
-  const [f, setF] = React.useState<FormState>(() => initialForm(editing, projects));
+  const [f, setF] = React.useState<FormState>(() => initialForm(editing, projects, prefill));
   const [attempted, setAttempted] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -121,6 +131,17 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
           )}
         </div>
 
+        {prefill && f.projectId === "new" && (
+          <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
+            Filled in from <strong>{prefill.group_label}</strong>&apos;s registration. Check the details, then set the schedule and panel below.
+            {!prefill.adviser_id && prefill.adviser_name && (
+              <span className="mt-1 block text-warning">
+                The group named &quot;{prefill.adviser_name}&quot; as adviser, who has no CDEMS account yet. Create their account in Faculty Accounts
+                first (then reopen this from Registrations), or choose the adviser below.
+              </span>
+            )}
+          </p>
+        )}
         {f.projectId === "new" && (
           <div className="grid gap-3 rounded-md border bg-background/40 p-3 sm:grid-cols-2">
             <div className="space-y-1 sm:col-span-2">

@@ -9,7 +9,7 @@ import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
   Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
-  RubricScope, SessionBundle, StageBlend, User,
+  RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
 import { uid } from "./utils";
@@ -527,4 +527,61 @@ export function gradeVisibleMembers(
   const staff = viewer.isAdmin || viewer.isPanelist || viewer.isSecretary || viewer.isAdviser;
   if (staff || !viewer.isStudent) return bundle.members;
   return bundle.members.filter((m) => m.user_id === viewer.user.id);
+}
+
+// ---------------------------------------------------------------------------
+// Group self-registration
+// ---------------------------------------------------------------------------
+export const ACADEMIC_YEAR_RE = /^\d{4}-\d{4}$/;
+export const MAX_GROUP_MEMBERS = 10;
+/** Faculty a group may pick as its adviser (same list as the schedule form). */
+export const ADVISER_ROLES: User["role"][] = ["adviser", "chair", "panelist"];
+/** Registration codes ignore case and surrounding spaces. */
+export const codeMatches = (entered: string, code: string) =>
+  !!code && entered.trim().toLowerCase() === code.trim().toLowerCase();
+const isUrl = (v: string) => /^https?:\/\/\S+$/i.test(v);
+
+/** Problems with a group's registration. The database checks the same rules. */
+export function registrationProblems(r: RegistrationInput): string[] {
+  const p: string[] = [];
+  if (!r.group_label.trim()) p.push("Group name is required.");
+  if (!r.title.trim()) p.push("Project title is required.");
+  const ay = r.academic_year.trim();
+  if (!ACADEMIC_YEAR_RE.test(ay)) p.push("Academic year must look like 2026-2027.");
+  else if (Number(ay.slice(5)) !== Number(ay.slice(0, 4)) + 1) p.push("Academic year must be two consecutive years, e.g. 2026-2027.");
+  if (!r.adviser_id && !r.adviser_name.trim()) p.push("Choose your adviser, or type their name if they are not listed.");
+  if (!EMAIL_RE.test(r.contact_email.trim())) p.push("Enter a valid contact email for the group leader.");
+  if (r.manuscript_url.trim() && !isUrl(r.manuscript_url.trim())) p.push("Manuscript link must start with https://");
+  if (r.demo_url.trim() && !isUrl(r.demo_url.trim())) p.push("Demo link must start with https://");
+  if (r.members.length === 0) p.push("Add at least one member.");
+  if (r.members.length > MAX_GROUP_MEMBERS) p.push(`A group can have at most ${MAX_GROUP_MEMBERS} members.`);
+  const nums = new Set<string>();
+  const emails = new Set<string>();
+  r.members.forEach((m, i) => {
+    const who = m.student_name.trim() || `Member ${i + 1}`;
+    if (!m.student_name.trim()) p.push(`Member ${i + 1}: full name is required.`);
+    if (!m.student_number.trim()) p.push(`${who}: student number is required.`);
+    else if (nums.has(m.student_number.trim())) p.push(`${who}: student number is listed twice.`);
+    const email = m.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) p.push(`${who}: enter a valid email (used to sign in).`);
+    else if (emails.has(email)) p.push(`${who}: email is listed twice.`);
+    nums.add(m.student_number.trim());
+    emails.add(email);
+  });
+  return p;
+}
+
+/** Registration members in the schedule form's "Name, Student No., email" format. */
+export const membersToText = (members: MemberInput[]) =>
+  members.map((m) => [m.student_name, m.student_number, m.email].map((x) => x.trim()).filter(Boolean).join(", ")).join("\n");
+
+/** Trimmed copy ready to store. */
+export function cleanRegistration(r: RegistrationInput): RegistrationInput {
+  return {
+    group_label: r.group_label.trim(), title: r.title.trim(), academic_year: r.academic_year.trim(),
+    adviser_id: r.adviser_id || null, adviser_name: r.adviser_id ? "" : r.adviser_name.trim(),
+    members: r.members.map((m) => ({ student_name: m.student_name.trim(), student_number: m.student_number.trim(), email: m.email.trim().toLowerCase() })),
+    manuscript_url: r.manuscript_url.trim(), demo_url: r.demo_url.trim(), abstract: r.abstract.trim(),
+    contact_email: r.contact_email.trim().toLowerCase(),
+  };
 }

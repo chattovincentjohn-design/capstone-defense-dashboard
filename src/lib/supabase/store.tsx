@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, groupScoringStarted, isRubricSyncable, memberProblems, saveStageRubric,
+  activeRubric, blendFor, buildAttendance, cleanRegistration, groupScoringStarted, registrationProblems, isRubricSyncable, memberProblems, saveStageRubric,
   sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
@@ -22,7 +22,7 @@ const SCORE_SAVE_MS = 500;
 const MINUTES_SAVE_MS = 800;
 const RELOAD_DEBOUNCE_MS = 250;
 
-const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], currentUserId: "", hydrated: false };
+const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], registrations: [], registrationSettings: { is_open: false, access_code: "" }, currentUserId: "", hydrated: false };
 const GUEST: User = { id: "", full_name: "Signed out", email: "", role: "student", department: null };
 
 const message = (e: unknown) =>
@@ -95,6 +95,8 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         rubric,
         grading: { ...seedGrading(), ...grading },
         accounts: [],
+        registrations: [],
+        registrationSettings: { is_open: false, access_code: "" },
         currentUserId: user.id,
         hydrated: true,
       });
@@ -315,6 +317,22 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await loadAll();
       return report;
     },
+
+    // ---- Group self-registration ---------------------------------------------
+    registrationInfo: (code) => repo.registrationInfo(sb, code),
+    async submitRegistration(code, input) {
+      const problems = registrationProblems(input);
+      if (problems.length) throw new Error(problems.join(" "));
+      await repo.submitRegistration(sb, code, cleanRegistration(input));
+    },
+    listRegistrations: () => repo.listRegistrations(sb),
+    getRegistrationSettings: () => repo.getRegistrationSettings(sb),
+    async saveRegistrationSettings(settings) {
+      if (settings.is_open && settings.access_code.trim().length < 4) throw new Error("Set a registration code of at least 4 characters before opening registration.");
+      await repo.saveRegistrationSettings(sb, settings);
+    },
+    setRegistrationStatus: (id, status) => repo.setRegistrationStatus(sb, id, status),
+    deleteRegistration: (id) => repo.deleteRegistration(sb, id),
 
     // ---- Accounts (admin-only RPCs) ----------------------------------------
     listAccounts: () => repo.listAccounts(sb),

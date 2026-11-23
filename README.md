@@ -17,6 +17,15 @@ Use **"Viewing as"** to switch between Chair, Panelists, Secretary, Adviser, Coo
 individual criteria and submit. Open **Deliberation**, then **Finalize & Lock**. Then as *Engr. Reyes* (Adviser),
 resolve revisions, and open the printable Rating Sheet and Minutes. **Reset demo data** is on the home page.
 
+## Group registration (`/register`)
+
+Group leaders register their own project and members on the public **/register** page. In the console's
+**Registrations** tab the Coordinator opens or closes registration and sets the registration code that
+leaders must enter (signed-out visitors can only call `registration_form_info` and
+`submit_group_registration`, and only with the right code). Each submission has a **Schedule defense**
+button that opens the schedule form already filled in; once scheduled, the students' sign-in accounts are
+created from the **Groups** tab as usual.
+
 ## Super Admin
 
 The **Super Admin** can do everything the Coordinator can, and is the only one who can create, promote,

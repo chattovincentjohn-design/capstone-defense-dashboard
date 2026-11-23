@@ -4,5 +4,5 @@ export function safeNextPath(next: string | null | undefined, fallback = "/"): s
 }
 
 /** Pages that must work while signed out. */
-export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth"];
+export const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/auth", "/register"];
 export const isPublicPath = (path: string) => PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}/`));

@@ -7,14 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { gradesCsv, sessionHasScores, type ScheduleDraft } from "@/lib/admin";
 import { useStore } from "@/lib/store";
-import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle } from "@/lib/types";
+import { STAGE_LABEL, VERDICT_LABEL, type GroupRegistration, type SessionBundle } from "@/lib/types";
 import { TIME_ZONE } from "@/lib/utils";
 import { ScheduleForm } from "./schedule-form";
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: TIME_ZONE });
 const timeOf = (iso: string) => new Date(iso).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", timeZone: TIME_ZONE });
 
-export function ScheduleManager() {
+export function ScheduleManager({ prefill = null, onPrefillDone }: {
+  prefill?: GroupRegistration | null;
+  onPrefillDone?: () => void;
+} = {}) {
   const { state, users, ops } = useStore();
   const [busy, setBusy] = React.useState(false);
   const [failure, setFailure] = React.useState<string | null>(null);
@@ -53,7 +56,22 @@ export function ScheduleManager() {
     }
   };
 
-  const submit = (d: ScheduleDraft) => run(() => (d.sessionId ? ops.updateSchedule(d) : ops.schedule(d)));
+  // Opening from a registration: show a new, pre-filled form.
+  React.useEffect(() => {
+    if (prefill) open({ kind: "new" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill]);
+
+  const submit = (d: ScheduleDraft) => run(async () => {
+    if (d.sessionId) return ops.updateSchedule(d);
+    const msg = await ops.schedule(d);
+    if (prefill && d.projectId === "new") {
+      await ops.setRegistrationStatus(prefill.id, "scheduled");
+      onPrefillDone?.();
+      return `${msg} ${prefill.group_label}'s registration is marked Scheduled — create the students' sign-in accounts in Groups.`;
+    }
+    return msg;
+  });
 
   const exportCsv = () => {
     const blob = new Blob(["﻿" + gradesCsv(locked, users)], { type: "text/csv;charset=utf-8" });
@@ -173,8 +191,9 @@ export function ScheduleManager() {
                   Scoring has started. You can reschedule or add panelists, but the stage and the seats of panelists who already scored are locked.
                 </p>
               )}
-              <ScheduleForm key={mode.kind === "edit" ? mode.id : "new"} state={state} users={users} editing={editing} busy={busy}
-                onSubmit={submit} onCancel={() => setMode({ kind: "closed" })} />
+              <ScheduleForm key={mode.kind === "edit" ? mode.id : `new-${prefill?.id ?? ""}`} state={state} users={users} editing={editing} busy={busy}
+                prefill={mode.kind === "new" ? prefill ?? undefined : undefined}
+                onSubmit={submit} onCancel={() => { setMode({ kind: "closed" }); onPrefillDone?.(); }} />
             </CardContent>
           </Card>
         )}
