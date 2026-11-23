@@ -278,7 +278,7 @@ function CreateAccountForm({ existing, roles, onCreate, onCancel }: {
 
 function CredentialCard({ credential, demo, onClose }: { credential: Credential; demo: boolean; onClose: () => void }) {
   const [copied, setCopied] = React.useState(false);
-  const text = `Capstone Defense Dashboard\nSign in: ${typeof window !== "undefined" ? window.location.origin : ""}/login\nEmail: ${credential.email}\nTemporary password: ${credential.password}\nPlease change it after signing in (your name → Change password).`;
+  const text = `CDEMS · Capstone Defense Evaluation and Management System\nSign in: ${typeof window !== "undefined" ? window.location.origin : ""}/login\nEmail: ${credential.email}\nTemporary password: ${credential.password}\nPlease change it after signing in (your name → Change password).`;
   return (
     <Card className="border-success/50">
       <CardContent className="space-y-3">

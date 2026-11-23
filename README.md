@@ -1,4 +1,4 @@
-# Capstone Defense Management & Evaluation Dashboard
+# Capstone Defense Evaluation and Management System (CDEMS)
 
 Next.js 15 (App Router) · TypeScript · Tailwind v4 · shadcn/ui (Radix) · Supabase (Postgres + Auth + Realtime)
 

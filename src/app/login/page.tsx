@@ -46,7 +46,7 @@ export default function LoginPage() {
         <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">JHCSC · School of Computing Studies</p>
       </div>
       <Card>
-        <CardHeader><CardTitle>Capstone Defense · Sign in</CardTitle></CardHeader>
+        <CardHeader><CardTitle>CDEMS · Sign in</CardTitle></CardHeader>
         <CardContent>
           {!isSupabaseConfigured() ? (
             <div className="space-y-3 text-sm">

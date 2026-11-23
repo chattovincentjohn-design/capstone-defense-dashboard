@@ -23,7 +23,7 @@ export function WorkspaceHeader({ bundle, order, userById }: {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2">
         <Button asChild size="icon" variant="ghost" aria-label="All sessions"><Link href="/"><Menu /></Link></Button>
         <h1 className="flex flex-1 items-center justify-center gap-2 text-center text-sm font-bold uppercase tracking-wider sm:text-lg">
-          <BrandLogo size={32} /> Capstone Defense Panel Dashboard
+          <BrandLogo size={32} /> <span className="hidden lg:inline">Capstone Defense Evaluation and Management System (CDEMS)</span><span className="lg:hidden">CDEMS</span>
         </h1>
         <RoleSwitcher />
       </div>
