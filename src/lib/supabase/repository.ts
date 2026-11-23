@@ -350,3 +350,8 @@ export async function deleteRegistration(sb: SupabaseClient, id: string) {
   const { error } = await sb.from("group_registrations").delete().eq("id", id);
   if (error) throw error;
 }
+
+export async function changeEmail(sb: SupabaseClient, id: string, email: string) {
+  const { error } = await sb.rpc("admin_change_email", { p_user: id, p_email: email });
+  if (error) throw error;
+}

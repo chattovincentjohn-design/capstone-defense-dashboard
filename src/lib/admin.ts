@@ -481,6 +481,14 @@ export function generateTempPassword(): string {
   return out;
 }
 
+/** Problem with a new sign-in email for an existing account, or null. */
+export function emailChangeProblem(email: string, accountId: string, accounts: Pick<Account, "id" | "email">[]): string | null {
+  const e = email.trim().toLowerCase();
+  if (!EMAIL_RE.test(e)) return "Enter a valid email address.";
+  if (accounts.some((a) => a.id !== accountId && a.email.toLowerCase() === e)) return "Another account already uses this email.";
+  return null;
+}
+
 /** Guards shared by both backends (the database enforces the same rules). */
 export function accountChangeProblem(
   actor: Pick<User, "id" | "role">, target: Pick<Account, "id" | "role">, change: { role?: Account["role"]; active?: boolean },

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountProblems, emailChangeProblem, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -362,5 +362,17 @@ describe("group self-registration", () => {
       seen.add(c);
     }
     expect(seen.size).toBe(200);
+  });
+});
+
+describe("changing a sign-in email", () => {
+  const accounts = [{ id: "a", email: "one@jhcsc.edu.ph" }, { id: "b", email: "two@jhcsc.edu.ph" }];
+  it("accepts a new unique email and the same email in another case", () => {
+    expect(emailChangeProblem("  New@JHCSC.edu.ph ", "a", accounts)).toBeNull();
+    expect(emailChangeProblem("ONE@jhcsc.edu.ph", "a", accounts)).toBeNull();
+  });
+  it("rejects invalid and taken emails", () => {
+    expect(emailChangeProblem("not-an-email", "a", accounts)).toMatch(/valid email/);
+    expect(emailChangeProblem("Two@jhcsc.edu.ph", "a", accounts)).toMatch(/already uses/);
   });
 });

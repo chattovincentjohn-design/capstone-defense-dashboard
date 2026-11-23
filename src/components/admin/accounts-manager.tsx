@@ -1,13 +1,13 @@
 "use client";
 import * as React from "react";
-import { Check, Copy, KeyRound, Power, PowerOff, Search, UserPlus, X, XCircle } from "lucide-react";
+import { Check, Copy, KeyRound, Pencil, Power, PowerOff, Search, UserPlus, X, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
-import { accountChangeProblem, accountProblems, assignableRoles, canManageAccount, isAdminRole } from "@/lib/admin";
+import { accountChangeProblem, accountProblems, assignableRoles, canManageAccount, emailChangeProblem, isAdminRole } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { ROLE_LABEL, type Account, type AccountInput, type UserRole } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
@@ -128,7 +128,9 @@ export function AccountsManager() {
                   <tr key={a.id} className={cn("border-b align-middle last:border-0", !a.is_active && "opacity-60")}>
                     <td className="px-4 py-2.5">
                       <p className="font-medium">{a.full_name} {self && <Badge variant="default" className="ml-1">You</Badge>}</p>
-                      <p className="text-xs text-muted-foreground">{a.email}</p>
+                      <EmailField account={a} accounts={accounts ?? []} disabled={busy || !manageable} title={lockedHint}
+                        onSave={(email) => act(a.id, () => ops.changeEmail(a.id, email),
+                          `${a.full_name} now signs in with ${email.trim().toLowerCase()}. Their password did not change.`)} />
                     </td>
                     <td className="px-2 py-2.5">
                       <NativeSelect className="h-8 w-44 text-xs" aria-label={`Role for ${a.full_name}`} value={a.role}
@@ -193,6 +195,43 @@ export function AccountsManager() {
         Disabling keeps the person&apos;s scores, signatures and minutes intact; it only blocks sign-in. Per-defense roles (Chair, member,
         Secretary) are set when scheduling; the role here is the person&apos;s default.
       </p>
+    </div>
+  );
+}
+
+function EmailField({ account, accounts, disabled, title, onSave }: {
+  account: Account; accounts: Account[]; disabled: boolean; title?: string; onSave: (email: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(account.email);
+  const problem = value.trim().toLowerCase() === account.email.toLowerCase() ? null : emailChangeProblem(value, account.id, accounts);
+  const unchanged = value.trim().toLowerCase() === account.email.toLowerCase();
+
+  if (!editing) {
+    return (
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
+        {account.email}
+        <Button size="icon" variant="ghost" className="size-6" aria-label={`Edit email for ${account.full_name}`} title={title ?? "Edit email"}
+          disabled={disabled} onClick={() => { setValue(account.email); setEditing(true); }}><Pencil className="size-3" /></Button>
+      </p>
+    );
+  }
+  const save = async () => {
+    if (problem || unchanged) return;
+    await onSave(value);
+    setEditing(false);
+  };
+  return (
+    <div className="mt-1 space-y-1">
+      <div className="flex items-center gap-1">
+        <Input type="email" autoFocus className="h-7 w-56 text-xs" aria-label={`New email for ${account.full_name}`} value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") void save(); if (e.key === "Escape") setEditing(false); }} />
+        <Button size="icon" className="size-7" aria-label="Save email" disabled={disabled || !!problem || unchanged} onClick={() => void save()}><Check /></Button>
+        <Button size="icon" variant="ghost" className="size-7" aria-label="Cancel" onClick={() => setEditing(false)}><X /></Button>
+      </div>
+      {problem && <p className="text-[11px] text-destructive">{problem}</p>}
+      {!problem && !unchanged && <p className="text-[11px] text-muted-foreground">They will sign in with this email from now on. The password stays the same.</p>}
     </div>
   );
 }

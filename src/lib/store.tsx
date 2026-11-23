@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, ADVISER_ROLES, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
@@ -68,6 +68,8 @@ export interface StoreOps {
   listAccounts(): Promise<Account[]>;
   createAccount(input: AccountInput): Promise<{ account: Account; tempPassword: string }>;
   updateAccount(id: string, patch: AccountPatch): Promise<void>;
+  /** Changes the sign-in email (login record, profile and any linked group member). */
+  changeEmail(id: string, email: string): Promise<void>;
   resetPassword(id: string): Promise<string>;
   setAccountActive(id: string, active: boolean): Promise<void>;
   addMember(projectId: string, input: MemberInput): Promise<void>;
@@ -315,6 +317,19 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const problem = accountChangeProblem(actor, target, { role: patch.role });
         if (problem) throw new Error(problem);
         replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+      },
+      async changeEmail(id, email) {
+        const s = stateRef.current;
+        const target = s.accounts.find((a) => a.id === id);
+        if (!target) throw new Error("Account not found.");
+        const actor = s.accounts.find((a) => a.id === s.currentUserId)!;
+        if (!canManageAccount(actor, target)) throw new Error("Only the Super Admin can manage Coordinator accounts.");
+        const problem = emailChangeProblem(email, id, s.accounts);
+        if (problem) throw new Error(problem);
+        const e = email.trim().toLowerCase();
+        const bundles = Object.fromEntries(Object.entries(s.bundles).map(([k, b]) =>
+          [k, { ...b, members: b.members.map((m) => (m.user_id === id ? { ...m, email: e } : m)) }]));
+        replaceAll({ ...s, bundles, accounts: s.accounts.map((a) => (a.id === id ? { ...a, email: e } : a)) });
       },
       async resetPassword(id) {
         const s = stateRef.current;

@@ -348,6 +348,11 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await repo.updateAccount(sb, id, patch);
       setUsers(await repo.listUsers(sb));
     },
+    async changeEmail(id, email) {
+      await repo.changeEmail(sb, id, email);
+      setUsers(await repo.listUsers(sb));
+      await loadAll();
+    },
     resetPassword: (id) => repo.resetPassword(sb, id),
     setAccountActive: (id, active) => repo.setAccountActive(sb, id, active),
 
