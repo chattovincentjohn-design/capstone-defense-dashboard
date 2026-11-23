@@ -154,6 +154,11 @@ export interface SessionBundle {
   scores: RubricScore[];
   comments: PanelComment[];
   minutes: DefenseMinutes;
+  /**
+   * Seats that have entered at least one score. Blind grading can hide other people's
+   * in-progress scores, so live mode loads this flag separately (never the scores).
+   */
+  scored_assignment_ids?: string[];
 }
 
 // ---------------------------------------------------------------------------

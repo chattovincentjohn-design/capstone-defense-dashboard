@@ -31,7 +31,7 @@ export function DeliberationMatrix({ bundle, viewer, userById, onFinalize }: {
               : "Consolidated scores are visible only to the Defense Chair until the defense is locked."}
           </span>
         </div>
-        <PanelStatusList assignments={bundle.assignments} scores={bundle.scores} userById={userById} />
+        <PanelStatusList bundle={bundle} userById={userById} />
       </div>
     );
   }

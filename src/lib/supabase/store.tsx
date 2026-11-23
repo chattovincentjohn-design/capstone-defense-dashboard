@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, isRubricSyncable, saveStageRubric, validateSchedule,
+  activeRubric, blendFor, buildAttendance, isRubricSyncable, saveStageRubric, sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
 import { seedGrading } from "../mock-data";
@@ -276,7 +276,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
 
     async deleteSession(sessionId) {
       const b = stateRef.current.bundles[sessionId];
-      if (b?.scores.length) throw new Error("Cannot delete a session with recorded scores.");
+      if (b && sessionHasScores(b)) throw new Error("Cannot delete a session with recorded scores.");
       await repo.deleteSession(sb, sessionId);
       await loadAll();
       return "Session removed from the schedule.";

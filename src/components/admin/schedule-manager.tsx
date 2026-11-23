@@ -5,7 +5,7 @@ import { CalendarPlus, Download, ExternalLink, Lock, Pencil, Trash2 } from "luci
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { gradesCsv, type ScheduleDraft } from "@/lib/admin";
+import { gradesCsv, sessionHasScores, type ScheduleDraft } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle } from "@/lib/types";
 import { TIME_ZONE } from "@/lib/utils";
@@ -103,7 +103,7 @@ export function ScheduleManager() {
                 {list.map((b) => {
                   const chair = b.assignments.find((a) => a.panel_role === "chair");
                   const submitted = b.assignments.filter((a) => a.has_submitted).length;
-                  const hasScores = b.scores.length > 0;
+                  const hasScores = sessionHasScores(b);
                   return (
                     <tr key={b.session.id} className="border-b align-top last:border-0">
                       <td className="px-4 py-2.5 tabular-nums">{timeOf(b.session.scheduled_at)}</td>
@@ -168,7 +168,7 @@ export function ScheduleManager() {
               <CardTitle>{editing ? `Edit — ${editing.project.group_label}: ${editing.project.title}` : "Schedule a Defense"}</CardTitle>
             </CardHeader>
             <CardContent>
-              {editing && editing.scores.length > 0 && (
+              {editing && sessionHasScores(editing) && (
                 <p className="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
                   Scoring has started. You can reschedule or add panelists, but the stage and the seats of panelists who already scored are locked.
                 </p>

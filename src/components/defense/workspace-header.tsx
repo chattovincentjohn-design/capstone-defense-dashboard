@@ -12,7 +12,7 @@ import { fmtDateTime } from "@/lib/utils";
 export function WorkspaceHeader({ bundle, order, userById }: {
   bundle: SessionBundle; order: string[]; userById: (id: string) => User | undefined;
 }) {
-  const { session, project, members, assignments, scores } = bundle;
+  const { session, project, members, assignments } = bundle;
   const idx = order.indexOf(session.id);
   const prev = order[(idx - 1 + order.length) % order.length];
   const next = order[(idx + 1) % order.length];
@@ -31,7 +31,7 @@ export function WorkspaceHeader({ bundle, order, userById }: {
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-muted-foreground">Panel:</span>
             {assignments.map((a) => {
-              const st = panelState(a, scores);
+              const st = panelState(a, bundle);
               const name = userById(a.faculty_id)?.full_name.split(" ").slice(-1)[0];
               return (
                 <Badge key={a.id} variant={st.variant} title={userById(a.faculty_id)?.full_name}>

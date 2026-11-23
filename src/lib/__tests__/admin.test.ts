@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import {
-  accountChangeProblem, accountProblems, generateTempPassword,
+  accountChangeProblem, accountProblems, assignmentHasScores, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -205,5 +205,49 @@ describe("accounts", () => {
     expect(accountChangeProblem("u-admin", admin, { role: "panelist" })).toMatch(/own Coordinator role/);
     expect(accountChangeProblem("u-admin", admin, { role: "admin" })).toBeNull();
     expect(accountChangeProblem("u-admin", existing.find((a) => a.id === "u-diaz")!, { active: false })).toBeNull();
+  });
+});
+
+describe("scoring status under blind grading (Coordinator view)", () => {
+  // What the Coordinator receives in live mode for Group 4: scores hidden by RLS,
+  // but the per-seat "has scored" flags from panel_scoring_status().
+  const coordinatorView = () => {
+    const s = state();
+    const b = s.bundles["sess-g4-final"];
+    s.bundles["sess-g4-final"] = { ...b, scores: [], scored_assignment_ids: ["pa-1-ramos", "pa-2-diaz", "pa-3-gomez"] };
+    return s;
+  };
+
+  it("blocks replacing the chair who has scored, though no scores are visible", () => {
+    const s = coordinatorView();
+    const e = errors(s, draft({
+      sessionId: "sess-g4-final", projectId: "p-g4", newProject: undefined, stage: "final",
+      chairId: "u-admin", memberIds: ["u-diaz", "u-gomez"],
+    }));
+    expect(e.some((m) => m.includes("Dr. Antonio C. Ramos has already entered scores"))).toBe(true);
+  });
+
+  it("still allows adding an extra member", () => {
+    const s = coordinatorView();
+    const e = errors(s, draft({
+      sessionId: "sess-g4-final", projectId: "p-g4", newProject: undefined, stage: "final",
+      chairId: "u-ramos", memberIds: ["u-diaz", "u-gomez", "u-admin"],
+    }));
+    expect(e).toEqual([]);
+  });
+
+  it("treats the session as started for rubric sync, stage changes and deletion", () => {
+    const s = coordinatorView();
+    expect(isRubricSyncable(s.bundles["sess-g4-final"])).toBe(false);
+    expect(() => deleteScheduledSession(s, "sess-g4-final")).toThrow(/recorded scores/);
+    const e = errors(s, draft({ sessionId: "sess-g4-final", projectId: "p-g4", newProject: undefined, stage: "proposal", chairId: "u-ramos", memberIds: ["u-diaz", "u-gomez"] }));
+    expect(e.some((m) => m.includes("Stage cannot change"))).toBe(true);
+  });
+
+  it("reports seat status from flags or visible scores", () => {
+    const b = coordinatorView().bundles["sess-g4-final"];
+    expect(assignmentHasScores(b, "pa-3-gomez")).toBe(true);
+    expect(assignmentHasScores({ scores: [], scored_assignment_ids: [] }, "pa-3-gomez")).toBe(false);
+    expect(sessionHasScores(state().bundles["sess-g7-proposal"])).toBe(false);
   });
 });

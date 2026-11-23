@@ -14,7 +14,7 @@ export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string):
   // numeric columns arrive as strings
   const session: DefenseSession = { ...raw, group_weight: Number(raw.group_weight), individual_weight: Number(raw.individual_weight) };
 
-  const [project, members, assignments, criteria, scores, comments, minutes] = await Promise.all([
+  const [project, members, assignments, criteria, scores, comments, minutes, scoring] = await Promise.all([
     sb.from("capstone_projects").select("*").eq("id", session.project_id).single<CapstoneProject>(),
     sb.from("project_members").select("*").eq("project_id", session.project_id).order("student_name"),
     sb.from("panel_assignments").select("*").eq("session_id", sessionId),
@@ -22,6 +22,7 @@ export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string):
     sb.from("rubric_scores").select("*").eq("session_id", sessionId),       // RLS-filtered
     sb.from("panel_comments").select("*").eq("session_id", sessionId).order("created_at"),
     sb.from("defense_minutes").select("*").eq("session_id", sessionId).maybeSingle<DefenseMinutes>(),
+    sb.rpc("panel_scoring_status", { p_session: sessionId }),          // who has scored, not what
   ]);
 
   return {
@@ -36,6 +37,8 @@ export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string):
       .sort((a, b) => a.sort_order - b.sort_order),
     scores: (scores.data ?? []).map((s) => ({ ...s, score: Number(s.score) })) as RubricScore[],
     comments: (comments.data ?? []) as PanelComment[],
+    scored_assignment_ids: ((scoring.data ?? []) as { assignment_id: string; has_scores: boolean }[])
+      .filter((r) => r.has_scores).map((r) => r.assignment_id),
     minutes: minutes.data
       ? { ...minutes.data, deliberation_notes: minutes.data.deliberation_notes ?? "" }
       : {

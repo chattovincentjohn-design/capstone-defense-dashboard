@@ -59,7 +59,15 @@ export function rubricProblems(criteria: RubricCriterion[]): string[] {
 }
 
 /** Sessions that would pick up template changes: unlocked and nobody has scored. */
-export const isRubricSyncable = (b: SessionBundle) => !b.session.is_locked && b.scores.length === 0;
+/** Has this seat entered any score? Works even when blind grading hides the scores themselves. */
+export const assignmentHasScores = (b: Pick<SessionBundle, "scores" | "scored_assignment_ids">, assignmentId: string) =>
+  b.scores.some((s) => s.panel_assignment_id === assignmentId) || (b.scored_assignment_ids ?? []).includes(assignmentId);
+
+/** Has anyone on this panel started scoring? */
+export const sessionHasScores = (b: Pick<SessionBundle, "scores" | "scored_assignment_ids">) =>
+  b.scores.length > 0 || (b.scored_assignment_ids?.length ?? 0) > 0;
+
+export const isRubricSyncable = (b: SessionBundle) => !b.session.is_locked && !sessionHasScores(b);
 
 /** Frozen = referenced by a session whose grades depend on it (scored or locked). Mirrors criterion_is_frozen() in SQL. */
 export const isCriterionInUse = (id: string, bundles: SessionBundle[]) =>
@@ -290,10 +298,10 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
   // edits that would discard recorded work
   if (editing) {
     if (editing.session.is_locked) err("Locked sessions cannot be edited.");
-    if (draft.stage !== editing.session.stage && editing.scores.length) err("Stage cannot change after scoring has started.");
+    if (draft.stage !== editing.session.stage && sessionHasScores(editing)) err("Stage cannot change after scoring has started.");
     for (const a of editing.assignments) {
       const keptAs = a.faculty_id === draft.chairId ? "chair" : draft.memberIds.includes(a.faculty_id) ? "member" : null;
-      if (keptAs !== a.panel_role && editing.scores.some((s) => s.panel_assignment_id === a.id)) {
+      if (keptAs !== a.panel_role && assignmentHasScores(editing, a.id)) {
         err(`${name(a.faculty_id)} has already entered scores and must stay on the panel as ${a.panel_role}.`);
       }
     }
@@ -391,7 +399,7 @@ export function updateScheduledSession(state: State, draft: ScheduleDraft, users
 export function deleteScheduledSession(state: State, sessionId: string): State {
   const b = state.bundles[sessionId];
   if (!b) return state;
-  if (b.scores.length) throw new Error("Cannot delete a session with recorded scores.");
+  if (sessionHasScores(b)) throw new Error("Cannot delete a session with recorded scores.");
   const bundles = { ...state.bundles };
   delete bundles[sessionId];
   return { ...state, bundles, order: state.order.filter((id) => id !== sessionId) };

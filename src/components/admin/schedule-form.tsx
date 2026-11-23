@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  FACULTY_ROLES, fromManilaInput, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
+  assignmentHasScores, FACULTY_ROLES, fromManilaInput, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
 } from "@/lib/admin";
 import type { State } from "@/lib/store";
 import { ROLE_LABEL, STAGE_LABEL, type DefenseStage, type SessionBundle, type User } from "@/lib/types";
@@ -69,7 +69,8 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
   const advisers = users.filter((u) => u.role === "adviser" || u.role === "chair" || u.role === "panelist");
   const selectedProject = projects.find((p) => p.project.id === f.projectId);
   const adviserId = f.projectId === "new" ? f.adviserId || null : selectedProject?.project.adviser_id ?? null;
-  const scored = new Set(editing?.scores.map((s) => editing.assignments.find((a) => a.id === s.panel_assignment_id)?.faculty_id));
+  // Faculty whose seat is locked because they've started scoring (works under blind grading too).
+  const scored = new Set(editing?.assignments.filter((a) => assignmentHasScores(editing, a.id)).map((a) => a.faculty_id));
 
   const draft: ScheduleDraft = {
     sessionId: editing?.session.id,
@@ -169,7 +170,7 @@ export function ScheduleForm({ state, users, editing, busy = false, onSubmit, on
           <div className="space-y-1">
             <Label htmlFor="sf-stage">Defense stage</Label>
             <NativeSelect id="sf-stage" value={f.stage} onChange={(e) => set("stage", e.target.value as DefenseStage)}
-              disabled={!!editing && editing.scores.length > 0}>
+              disabled={!!editing && sessionHasScores(editing)}>
               {(Object.keys(STAGE_LABEL) as DefenseStage[]).map((s) => <option key={s} value={s}>{STAGE_LABEL[s]}</option>)}
             </NativeSelect>
           </div>

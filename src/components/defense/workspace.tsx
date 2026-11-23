@@ -86,7 +86,7 @@ export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
               <span className="text-[11px] text-muted-foreground">Live · changes autosave</span>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
-              <PanelStatusList assignments={bundle.assignments} scores={bundle.scores} userById={userById} />
+              <PanelStatusList bundle={bundle} userById={userById} />
               <div className="flex flex-col gap-2">
                 <Button asChild size="sm" variant="outline"><Link href={`/print/${sessionId}/rating-sheet`} target="_blank"><Printer /> Rating Sheet</Link></Button>
                 <Button asChild size="sm" variant="outline"><Link href={`/print/${sessionId}/minutes`} target="_blank"><Printer /> Minutes of the Defense</Link></Button>
