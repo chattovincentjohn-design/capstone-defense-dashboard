@@ -535,7 +535,7 @@ export function gradeVisibleMembers(
 export const ACADEMIC_YEAR_RE = /^\d{4}-\d{4}$/;
 export const MAX_GROUP_MEMBERS = 10;
 /** Faculty a group may pick as its adviser (same list as the schedule form). */
-export const ADVISER_ROLES: User["role"][] = ["adviser", "chair", "panelist"];
+export const ADVISER_ROLES: User["role"][] = ["adviser", "chair", "panelist", "admin", "superadmin"];
 /** Random registration code, e.g. SCS-7KQ4-M2XP (no look-alike characters such as 0/O or 1/I). */
 export function generateRegistrationCode(): string {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  assignmentHasScores, FACULTY_ROLES, fromManilaInput, membersToText, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
+  ADVISER_ROLES, assignmentHasScores, FACULTY_ROLES, fromManilaInput, membersToText, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
 } from "@/lib/admin";
 import type { State } from "@/lib/store";
 import { ROLE_LABEL, STAGE_LABEL, type DefenseStage, type GroupRegistration, type SessionBundle, type User } from "@/lib/types";
@@ -76,7 +76,7 @@ export function ScheduleForm({ state, users, editing, prefill, busy = false, onS
 
   const faculty = users.filter((u) => FACULTY_ROLES.includes(u.role));
   const staff = users.filter((u) => u.role === "secretary" || u.role === "admin" || u.role === "superadmin");
-  const advisers = users.filter((u) => u.role === "adviser" || u.role === "chair" || u.role === "panelist");
+  const advisers = users.filter((u) => ADVISER_ROLES.includes(u.role));
   const selectedProject = projects.find((p) => p.project.id === f.projectId);
   const adviserId = f.projectId === "new" ? f.adviserId || null : selectedProject?.project.adviser_id ?? null;
   // Faculty whose seat is locked because they've started scoring (works under blind grading too).
