@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import * as React from "react";
 import Link from "next/link";
 import { KeyRound } from "lucide-react";
@@ -46,6 +47,10 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="mx-auto mt-24 max-w-sm px-4">
+      <div className="mb-4 flex flex-col items-center gap-2 text-center">
+        <BrandLogo size={96} />
+        <p className="text-xs font-semibold uppercase tracking-widest text-brand-gray">JHCSC · School of Computing Studies</p>
+      </div>
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><KeyRound className="size-4" /> Choose a new password</CardTitle></CardHeader>
         <CardContent className="space-y-3 text-sm">

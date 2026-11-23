@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Lock, Menu } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -21,7 +22,9 @@ export function WorkspaceHeader({ bundle, order, userById }: {
     <header className="border-b bg-card/80 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2">
         <Button asChild size="icon" variant="ghost" aria-label="All sessions"><Link href="/"><Menu /></Link></Button>
-        <h1 className="flex-1 text-center text-sm font-bold uppercase tracking-wider sm:text-lg">Capstone Defense Panel Dashboard</h1>
+        <h1 className="flex flex-1 items-center justify-center gap-2 text-center text-sm font-bold uppercase tracking-wider text-primary sm:text-lg">
+          <BrandLogo size={32} /> Capstone Defense Panel Dashboard
+        </h1>
         <RoleSwitcher />
       </div>
 

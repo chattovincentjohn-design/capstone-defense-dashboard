@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import Link from "next/link";
 import { CalendarClock, RotateCcw, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -22,11 +23,14 @@ export default function Home() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 p-6">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-bold uppercase tracking-wider">Capstone Defense Panel Dashboard</h1>
+        <div className="flex items-center gap-3">
+          <BrandLogo size={56} />
+          <div>
+          <h1 className="text-xl font-bold uppercase tracking-wider text-primary">Capstone Defense Panel Dashboard</h1>
           <p className="text-sm text-muted-foreground">
             {mode === "demo" ? "Demo mode · data persists in this browser. Switch identity to test each role." : "Live · changes are shared with the whole panel in real time."}
           </p>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {(currentUser.role === "admin" || currentUser.role === "superadmin") && (

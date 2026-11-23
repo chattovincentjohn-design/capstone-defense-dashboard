@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import * as React from "react";
 import Link from "next/link";
 import { ArrowLeft, MailCheck, Send } from "lucide-react";
@@ -49,6 +50,10 @@ export default function ForgotPasswordPage() {
   return (
     <div className="mx-auto mt-24 max-w-sm space-y-3 px-4">
       <Button asChild variant="ghost" size="sm"><Link href="/login"><ArrowLeft /> Back to sign in</Link></Button>
+      <div className="mb-4 flex flex-col items-center gap-2 text-center">
+        <BrandLogo size={96} />
+        <p className="text-xs font-semibold uppercase tracking-widest text-brand-gray">JHCSC · School of Computing Studies</p>
+      </div>
       <Card>
         <CardHeader><CardTitle>Reset your password</CardTitle></CardHeader>
         <CardContent>

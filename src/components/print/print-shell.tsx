@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import Link from "next/link";
 import { ArrowLeft, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -29,9 +30,15 @@ export function PrintShell({ sessionId, draft, children }: { sessionId: string; 
 export function DocHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <header className="mb-5 text-center">
-      <p className="text-[10pt] uppercase tracking-wide">Republic of the Philippines</p>
-      <p className="font-bold uppercase">[Institution Name]</p>
-      <p className="text-[10pt]">College of Computing Studies · Office of the Capstone Coordinator</p>
+      <div className="flex items-center justify-center gap-4">
+        <BrandLogo size={72} />
+        <div>
+          <p className="text-[10pt] uppercase tracking-wide">Republic of the Philippines</p>
+          <p className="font-bold uppercase">J.H. Cerilles State College</p>
+          <p className="text-[10pt]">School of Computing Studies · Office of the Capstone Coordinator</p>
+        </div>
+        <div className="w-[72px]" aria-hidden />
+      </div>
       <hr className="my-3 border-black" />
       <h1 className="text-[14pt] font-bold uppercase">{title}</h1>
       <p className="text-[10pt]">{subtitle}</p>

@@ -1,4 +1,5 @@
 "use client";
+import { BrandLogo } from "@/components/app/brand";
 import Link from "next/link";
 import { ArrowLeft, CalendarDays, GraduationCap, ListChecks, ShieldAlert, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -22,8 +23,9 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
       <header className="flex flex-wrap items-center justify-between gap-3 border-b bg-card/80 px-4 py-3 backdrop-blur">
         <div className="flex items-center gap-2">
           <Button asChild size="icon" variant="ghost" aria-label="Back to dashboard"><Link href="/"><ArrowLeft /></Link></Button>
+          <BrandLogo size={40} />
           <div>
-            <h1 className="text-base font-bold uppercase tracking-wider sm:text-lg">Coordinator Console</h1>
+            <h1 className="text-base font-bold uppercase tracking-wider text-primary sm:text-lg">{currentUser.role === "superadmin" ? "Super Admin Console" : "Coordinator Console"}</h1>
             <p className="text-xs text-muted-foreground">Defense scheduling · Groups · Rubric configuration · Accounts</p>
           </div>
         </div>
