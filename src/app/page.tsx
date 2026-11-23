@@ -1,103 +1,56 @@
-import Image from "next/image";
+"use client";
+import Link from "next/link";
+import { CalendarClock, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RoleSwitcher } from "@/components/defense/role-switcher";
+import { useStore } from "@/lib/store";
+import { STAGE_LABEL, VERDICT_LABEL } from "@/lib/types";
+import { fmtDateTime } from "@/lib/utils";
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const { state, reset, currentUser } = useStore();
+  const sessions = state.order.map((id) => state.bundles[id]);
+  const mine = sessions.filter((b) =>
+    currentUser.role === "admin" ||
+    b.assignments.some((a) => a.faculty_id === currentUser.id) ||
+    b.session.secretary_id === currentUser.id ||
+    b.project.adviser_id === currentUser.id ||
+    b.members.some((m) => m.user_id === currentUser.id));
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  return (
+    <div className="mx-auto max-w-4xl space-y-6 p-6">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-bold uppercase tracking-wider">Capstone Defense Panel Dashboard</h1>
+          <p className="text-sm text-muted-foreground">Demo mode · data persists in this browser. Switch identity to test each role.</p>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+        <RoleSwitcher />
+      </header>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><CalendarClock className="size-4" /> Defense Schedule</CardTitle>
+          <Button size="sm" variant="ghost" onClick={reset}><RotateCcw /> Reset demo data</Button>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {mine.length === 0 && <p className="text-sm text-muted-foreground">No defense sessions assigned to {currentUser.full_name}.</p>}
+          {mine.map((b) => (
+            <Link key={b.session.id} href={`/defense/${b.session.id}`}
+              className="block rounded-md border bg-background/40 p-4 transition-colors hover:border-primary">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">{STAGE_LABEL[b.session.stage]}</Badge>
+                <span className="font-semibold">{b.project.group_label}: {b.project.title}</span>
+                {b.session.verdict
+                  ? <Badge variant="success" className="ml-auto">{VERDICT_LABEL[b.session.verdict]}</Badge>
+                  : <Badge variant="warning" className="ml-auto">In progress · {b.assignments.filter((a) => a.has_submitted).length}/{b.assignments.length} submitted</Badge>}
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">{fmtDateTime(b.session.scheduled_at)} · {b.session.room_or_link}</p>
+            </Link>
+          ))}
+        </CardContent>
+      </Card>
     </div>
   );
 }

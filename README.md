@@ -1,36 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Capstone Defense Management & Evaluation Dashboard
 
-## Getting Started
+Next.js 15 (App Router) · TypeScript · Tailwind v4 · shadcn/ui (Radix) · Supabase (Postgres + Auth + Realtime)
 
-First, run the development server:
+## Run the demo (no database needed)
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm test           # grading engine, blind-grading rules, signatures
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Demo mode stores data in `localStorage` and syncs between browser tabs, which stands in for Realtime.
+Use **"Viewing as"** to switch between Chair, Panelists, Secretary, Adviser, Coordinator, and Proponent.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Try this:** as *Prof. Gomez*, finish scoring and **Submit Ratings**. Then as *Dr. Ramos* (Chair), score the
+individual criteria and submit. Open **Deliberation**, then **Finalize & Lock**. Then as *Engr. Reyes* (Adviser),
+resolve revisions, and open the printable Rating Sheet and Minutes. **Reset demo data** is on the home page.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Connect Supabase
 
-## Learn More
+1. Run `supabase/migrations/*_capstone_defense.sql`, then `supabase/seed.sql`, in the SQL Editor.
+2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+3. Promote roles: `update public.users set role='admin' where email='…';`
 
-To learn more about Next.js, take a look at the following resources:
+With the env vars set, `src/middleware.ts` enforces login and role-based routes. The data calls are in
+`src/lib/supabase/repository.ts` and `realtime.ts`; each one matches an action in `src/lib/store.tsx`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Layout
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Path | Purpose |
+|---|---|
+| `supabase/migrations/` | Enums, tables, RLS (blind grading), RPCs `submit_evaluation`, `finalize_defense`, `resolve_revision`, Realtime publication |
+| `src/lib/grading.ts` | Weighted group/individual scoring, 60/40 blend, transmutation, variance flags, suggested verdict |
+| `src/lib/signature.ts` | SHA-256 e-signatures (same format as the SQL RPCs, so they can be checked in the browser) |
+| `src/lib/permissions.ts` | Client-side copy of the RLS rules, used to decide what the UI shows |
+| `src/components/defense/` | Workspace: header/timer, rubric scorer, comment logger, minutes recorder, deliberation matrix, revision tracker |
+| `src/components/print/` | A4 print/PDF templates: Consolidated Rating Sheet, Minutes of the Defense |

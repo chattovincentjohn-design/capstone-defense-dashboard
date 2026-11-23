@@ -1,26 +1,80 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --radius: 0.5rem;
+  --background: #0a1726;
+  --foreground: #e6eef6;
+  --card: #0f2235;
+  --card-foreground: #e6eef6;
+  --muted: #142b42;
+  --muted-foreground: #8ea7bf;
+  --border: #23425f;
+  --input: #2a4d6d;
+  --primary: #2fb5b0;
+  --primary-foreground: #04201f;
+  --secondary: #17324c;
+  --secondary-foreground: #d7e6f3;
+  --accent: #1b3a57;
+  --accent-foreground: #e6eef6;
+  --destructive: #e05561;
+  --success: #3fbf7f;
+  --warning: #e3b341;
+  --ring: #2fb5b0;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+* { border-color: var(--border); }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
+  background-image:
+    linear-gradient(rgba(47, 181, 176, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 181, 176, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* Print documents render on white paper regardless of app theme */
+.paper {
+  background: #fff;
+  color: #111;
+  font-family: "Times New Roman", Georgia, serif;
+}
+.paper table { border-collapse: collapse; width: 100%; }
+.paper th, .paper td { border: 1px solid #333; padding: 4px 6px; }
+
+@media print {
+  @page { size: A4; margin: 14mm; }
+  body { background: #fff !important; }
+  .no-print { display: none !important; }
+  .paper { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: auto !important; }
+  .page-break { break-before: page; }
 }
