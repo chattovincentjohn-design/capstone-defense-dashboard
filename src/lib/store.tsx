@@ -5,10 +5,10 @@
  * see live status updates (the production equivalent is lib/supabase/realtime.ts).
  */
 import * as React from "react";
-import { seedBundles, seedRubric, USERS } from "./mock-data";
+import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
-import type { DefenseMinutes, PanelComment, RubricCriterion, SessionBundle, User, Verdict } from "./types";
+import type { DefenseMinutes, DefenseStage, PanelComment, RubricCriterion, SessionBundle, StageBlend, User, Verdict } from "./types";
 import { uid } from "./utils";
 
 const STORAGE_KEY = "cdms-demo-state-v1";
@@ -17,6 +17,8 @@ export interface State {
   bundles: Record<string, SessionBundle>;
   /** Rubric templates edited by the Coordinator (sessions hold frozen snapshots). */
   rubric: RubricCriterion[];
+  /** Group/individual final-grade blend per stage (sessions hold frozen copies). */
+  grading: Record<DefenseStage, StageBlend>;
   order: string[];
   currentUserId: string;
   hydrated: boolean;
@@ -34,6 +36,7 @@ function initial(): State {
     bundles: Object.fromEntries(bundles.map((b) => [b.session.id, b])),
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
+    grading: seedGrading(),
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -99,7 +102,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
   React.useEffect(() => {
     if (!state.hydrated) return;
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundles: state.bundles, order: state.order, rubric: state.rubric, currentUserId: state.currentUserId }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading, currentUserId: state.currentUserId }));
     } catch { /* ignore */ }
   }, [state]);
 

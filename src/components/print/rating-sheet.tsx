@@ -1,5 +1,5 @@
 "use client";
-import { consolidate, splitCriteria, TRANSMUTATION_TABLE, DEFAULT_GRADING_CONFIG } from "@/lib/grading";
+import { configFor, consolidate, splitCriteria, TRANSMUTATION_TABLE } from "@/lib/grading";
 import { canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle, type User } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
@@ -9,6 +9,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
   const { session, project } = bundle;
   const allowed = canOpenDeliberation(viewer, bundle);
   const c = consolidate(bundle);
+  const cfg = configFor(bundle);
   const { group, individual } = splitCriteria(bundle.criteria);
   const name = (fid: string) => userById(fid)?.full_name ?? "";
   const chair = bundle.assignments.find((a) => a.panel_role === "chair");
@@ -30,7 +31,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
         </p>
       ) : (
         <>
-          <h2 className="mb-1 font-bold">I. Group Criteria ({DEFAULT_GRADING_CONFIG.groupWeight}% of final grade)</h2>
+          <h2 className="mb-1 font-bold">I. Group Criteria ({cfg.groupWeight}% of final grade)</h2>
           <table className="mb-4 text-[10pt]">
             <thead className="bg-neutral-100">
               <tr>
@@ -58,7 +59,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
             </tbody>
           </table>
 
-          <h2 className="mb-1 font-bold">II. Individual Criteria ({DEFAULT_GRADING_CONFIG.individualWeight}% of final grade)</h2>
+          <h2 className="mb-1 font-bold">II. Individual Criteria ({cfg.individualWeight}% of final grade)</h2>
           <table className="mb-4 text-[10pt]">
             <thead className="bg-neutral-100">
               <tr>
@@ -98,7 +99,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
           </table>
           <p className="mb-3 text-[8pt] text-neutral-600">
             Transmutation: {TRANSMUTATION_TABLE.filter((t) => t.min > 0).map((t) => `≥${t.min}=${t.grade.toFixed(2)}`).join(", ")}, below 75=5.00.
-            Final % = Group % × {DEFAULT_GRADING_CONFIG.groupWeight}% + Individual % × {DEFAULT_GRADING_CONFIG.individualWeight}%, averaged across panel members.
+            Final % = Group % × {cfg.groupWeight}% + Individual % × {cfg.individualWeight}%, averaged across panel members.
           </p>
 
           <p className="border border-black p-2 text-center text-[12pt]">

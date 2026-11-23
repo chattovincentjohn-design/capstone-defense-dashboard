@@ -27,6 +27,9 @@ Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordin
   It warns about panelist, secretary, and room double-booking within a 2-hour slot.
   Edits can't remove a panelist who has already scored. Sessions with scores can't be deleted.
   **Export grades (CSV)** downloads results for all locked defenses.
+- **Final Grade Blend:** per stage, set how much the group score and the individual score count toward each
+  proponent's final grade (default 60/40; the two shares must total 100). Each defense keeps the blend it was
+  scheduled with, so a change only reaches defenses nobody has scored yet.
 - **Rubric Configuration:** per stage, add, remove, reorder, and reweight group and individual criteria
   (each section must total 100%). Each session keeps the rubric it was scheduled with. Saving re-applies the
   template only to sessions nobody has scored. A criterion graded in a scored or locked session is never edited
@@ -34,7 +37,7 @@ Switch to **Engr. Liza M. Fernandez — Capstone Coordinator** and open *Coordin
 
 ## Connect Supabase
 
-1. Run both files in `supabase/migrations/` in name order, then `supabase/seed.sql`, in the SQL Editor.
+1. Run the files in `supabase/migrations/` in name order, then `supabase/seed.sql`, in the SQL Editor.
 2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
 3. Promote roles: `update public.users set role='admin' where email='…';`
 

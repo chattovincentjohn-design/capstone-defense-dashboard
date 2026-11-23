@@ -4,12 +4,12 @@
  *  criterion %   = score / max_score
  *  group %       = Σ(criterion% × weight) / Σweight × 100       (group criteria)
  *  individual %  = same, per student                              (individual criteria)
- *  student final = group% × groupWeight + individual% × indivWeight   (default 60/40)
+ *  student final = group% × groupWeight + individual% × indivWeight   (per session; default 60/40)
  *  consolidated  = mean of each submitted panelist's student final
  *  transmuted    = percentage → 1.00–5.00 college scale (table below)
  */
 import type {
-  PanelAssignment, ProjectMember, RubricCriterion, RubricScore, SessionBundle, Verdict,
+  DefenseSession, PanelAssignment, ProjectMember, RubricCriterion, RubricScore, SessionBundle, Verdict,
 } from "./types";
 import { round } from "./utils";
 
@@ -27,6 +27,13 @@ export const DEFAULT_GRADING_CONFIG: GradingConfig = {
   passingPercent: 75,
   varianceThreshold: 1.0,
 };
+
+/** The blend a session was scheduled with; legacy sessions without one use the default. */
+export function configFor(bundle?: { session?: Partial<Pick<DefenseSession, "group_weight" | "individual_weight">> }): GradingConfig {
+  const s = bundle?.session;
+  if (s?.group_weight == null || s?.individual_weight == null) return DEFAULT_GRADING_CONFIG;
+  return { ...DEFAULT_GRADING_CONFIG, groupWeight: Number(s.group_weight), individualWeight: Number(s.individual_weight) };
+}
 
 /** Standard Philippine HEI transmutation (percentage → grade point). */
 export const TRANSMUTATION_TABLE: { min: number; grade: number; remark: string }[] = [
@@ -116,9 +123,9 @@ export interface PanelistEvaluation {
 }
 
 export function evaluatePanelist(
-  bundle: Pick<SessionBundle, "criteria" | "scores" | "members">,
+  bundle: Pick<SessionBundle, "criteria" | "scores" | "members"> & { session?: Partial<DefenseSession> },
   assignment: PanelAssignment,
-  config: GradingConfig = DEFAULT_GRADING_CONFIG,
+  config: GradingConfig = configFor(bundle),
 ): PanelistEvaluation {
   const { group, individual } = splitCriteria(bundle.criteria);
   const g = weightedScore(group, scoreLookup(bundle.scores, assignment.id, null));
@@ -141,6 +148,7 @@ export function evaluatePanelist(
 function finalPercent(groupPct: number, indivPct: number, config: GradingConfig, hasIndividual: boolean) {
   if (!hasIndividual) return groupPct;
   const w = config.groupWeight + config.individualWeight;
+  if (w <= 0) return groupPct;
   return round((groupPct * config.groupWeight + indivPct * config.individualWeight) / w, 2);
 }
 
@@ -185,7 +193,7 @@ export interface Consolidation {
 /** Aggregate scores. By default only submitted (signed) evaluations count. */
 export function consolidate(
   bundle: SessionBundle,
-  config: GradingConfig = DEFAULT_GRADING_CONFIG,
+  config: GradingConfig = configFor(bundle),
   opts: { includeUnsubmitted?: boolean } = {},
 ): Consolidation {
   const assignments = bundle.assignments.filter((a) => opts.includeUnsubmitted || a.has_submitted);

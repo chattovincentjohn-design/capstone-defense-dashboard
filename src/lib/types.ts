@@ -46,6 +46,15 @@ export interface DefenseSession {
   is_locked: boolean;
   locked_at: string | null;
   chair_signature_hash: string | null;
+  /** Final-grade blend frozen at scheduling time (sums to 100). Missing on legacy rows → 60/40. */
+  group_weight: number;
+  individual_weight: number;
+}
+
+/** Per-stage template for the group/individual final-grade blend. */
+export interface StageBlend {
+  groupWeight: number;
+  individualWeight: number;
 }
 
 export interface PanelAssignment {

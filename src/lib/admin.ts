@@ -5,11 +5,11 @@
  *  - criteria in use by any session are copy-on-write (retire + new version)
  *  - template changes re-sync only sessions that nobody has scored yet
  */
-import { consolidate } from "./grading";
+import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
   CapstoneProject, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
-  RubricScope, SessionBundle, User,
+  RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
 import { uid } from "./utils";
@@ -72,6 +72,25 @@ const snapshot = (rubric: RubricCriterion[], stage: DefenseStage) =>
     return copy;
   });
 
+// ---------------------------------------------------------------------------
+// Final-grade blend (group vs individual), per stage
+// ---------------------------------------------------------------------------
+export function blendFor(state: Pick<State, "grading">, stage: DefenseStage): StageBlend {
+  return state.grading?.[stage] ?? { groupWeight: DEFAULT_GRADING_CONFIG.groupWeight, individualWeight: DEFAULT_GRADING_CONFIG.individualWeight };
+}
+
+export function blendProblems(b: StageBlend): string[] {
+  const p: string[] = [];
+  const ok = (n: number) => Number.isFinite(n) && n >= 0 && n <= 100;
+  if (!ok(b.groupWeight) || !ok(b.individualWeight)) p.push("Group and individual shares must each be between 0% and 100%.");
+  else if (Math.round((b.groupWeight + b.individualWeight) * 100) / 100 !== 100) p.push(`Group + individual shares total ${b.groupWeight + b.individualWeight}%, must be 100%.`);
+  if (b.groupWeight === 0 && b.individualWeight === 0) p.push("At least one share must be above 0%.");
+  return p;
+}
+
+export const sessionUsesBlend = (a: StageBlend, s: SessionBundle["session"]) =>
+  a.groupWeight === s.group_weight && a.individualWeight === s.individual_weight;
+
 export interface RubricSaveReport {
   updated: number;
   versioned: number;   // in-use criteria retired and re-created
@@ -79,19 +98,26 @@ export interface RubricSaveReport {
   retired: number;
   synced: string[];    // session ids that received the new rubric
   frozen: string[];    // session ids that keep their snapshot
+  blendChanged: boolean;
 }
 
 /**
  * Save the full set of criteria for one stage. Drafts whose id starts with "new-" are inserted.
  * Throws if the resulting rubric is invalid.
  */
-export function saveStageRubric(state: State, stage: DefenseStage, drafts: RubricCriterion[]): { state: State; report: RubricSaveReport } {
-  const problems = rubricProblems(drafts);
+export function saveStageRubric(
+  state: State, stage: DefenseStage, drafts: RubricCriterion[], blend: StageBlend = blendFor(state, stage),
+): { state: State; report: RubricSaveReport } {
+  const problems = [...blendProblems(blend), ...rubricProblems(drafts)];
   if (problems.length) throw new Error(problems.join(" "));
 
   const bundles = Object.values(state.bundles);
   const current = activeRubric(state.rubric, stage);
-  const report: RubricSaveReport = { updated: 0, versioned: 0, added: 0, retired: 0, synced: [], frozen: [] };
+  const prevBlend = blendFor(state, stage);
+  const report: RubricSaveReport = {
+    updated: 0, versioned: 0, added: 0, retired: 0, synced: [], frozen: [],
+    blendChanged: prevBlend.groupWeight !== blend.groupWeight || prevBlend.individualWeight !== blend.individualWeight,
+  };
   let rubric = [...state.rubric];
   // In-place edits of description/sort_order are visible in snapshots too (same row in SQL).
   const cosmetic = new Map<string, Pick<RubricCriterion, "description" | "sort_order">>();
@@ -129,14 +155,18 @@ export function saveStageRubric(state: State, stage: DefenseStage, drafts: Rubri
   for (const [id, b] of Object.entries(state.bundles)) {
     if (b.session.stage !== stage) { nextBundles[id] = b; continue; }
     if (isRubricSyncable(b)) {
-      nextBundles[id] = { ...b, criteria: snapshot(rubric, stage) };
+      nextBundles[id] = {
+        ...b,
+        session: { ...b.session, group_weight: blend.groupWeight, individual_weight: blend.individualWeight },
+        criteria: snapshot(rubric, stage),
+      };
       report.synced.push(id);
     } else {
       nextBundles[id] = { ...b, criteria: b.criteria.map((c) => (cosmetic.has(c.id) ? { ...c, ...cosmetic.get(c.id)! } : c)) };
       report.frozen.push(id);
     }
   }
-  return { state: { ...state, rubric, bundles: nextBundles }, report };
+  return { state: { ...state, rubric, grading: { ...state.grading, [stage]: blend }, bundles: nextBundles }, report };
 }
 
 // ---------------------------------------------------------------------------
@@ -253,6 +283,8 @@ export function validateSchedule(draft: ScheduleDraft, state: State, users: User
   if (!editing || isRubricSyncable(editing)) {
     const problems = rubricProblems(activeRubric(state.rubric, draft.stage));
     if (problems.length) err(`The ${STAGE_LABEL[draft.stage]} rubric is not ready: ${problems[0]}`);
+    const bp = blendProblems(blendFor(state, draft.stage));
+    if (bp.length) err(`The ${STAGE_LABEL[draft.stage]} grade blend is not ready: ${bp[0]}`);
   }
 
   // edits that would discard recorded work
@@ -316,6 +348,7 @@ export function scheduleSession(state: State, draft: ScheduleDraft, users: User[
   const bundle: SessionBundle = {
     session: {
       id: sessionId, project_id: project.id, stage: draft.stage, scheduled_at: draft.scheduledAt,
+      group_weight: blendFor(state, draft.stage).groupWeight, individual_weight: blendFor(state, draft.stage).individualWeight,
       room_or_link: draft.room.trim(), secretary_id: draft.secretaryId, verdict: null, is_locked: false,
       locked_at: null, chair_signature_hash: null,
     },
@@ -342,7 +375,10 @@ export function updateScheduledSession(state: State, draft: ScheduleDraft, users
   };
   const next: SessionBundle = {
     ...b,
-    session: { ...b.session, stage: draft.stage, scheduled_at: draft.scheduledAt, room_or_link: draft.room.trim(), secretary_id: draft.secretaryId },
+    session: {
+      ...b.session, stage: draft.stage, scheduled_at: draft.scheduledAt, room_or_link: draft.room.trim(), secretary_id: draft.secretaryId,
+      ...(stageChanged && { group_weight: blendFor(state, draft.stage).groupWeight, individual_weight: blendFor(state, draft.stage).individualWeight }),
+    },
     assignments,
     criteria: stageChanged ? snapshot(state.rubric, draft.stage) : b.criteria,
     comments: b.comments.filter((c) => keptIds.has(c.panel_assignment_id)),

@@ -1,16 +1,17 @@
 "use client";
 import * as React from "react";
-import { ArrowDown, ArrowUp, CheckCircle2, GitBranch, Plus, RotateCcw, Save, Scale, Trash2, XCircle } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, GitBranch, PieChart, Plus, RotateCcw, Save, Scale, Trash2, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import {
-  activeRubric, isRubricSyncable, rubricProblems, saveStageRubric, weightTotals, type RubricSaveReport,
+  activeRubric, blendFor, blendProblems, isRubricSyncable, rubricProblems, saveStageRubric, sessionUsesBlend, weightTotals,
+  type RubricSaveReport,
 } from "@/lib/admin";
-import { DEFAULT_GRADING_CONFIG } from "@/lib/grading";
 import { useStore } from "@/lib/store";
-import { STAGE_LABEL, type DefenseStage, type RubricCriterion, type RubricScope } from "@/lib/types";
+import { STAGE_LABEL, type DefenseStage, type RubricCriterion, type RubricScope, type StageBlend } from "@/lib/types";
 import { cn, round } from "@/lib/utils";
 
 const STAGES = Object.keys(STAGE_LABEL) as DefenseStage[];
@@ -31,7 +32,7 @@ export function RubricEditor() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2" role="tablist" aria-label="Defense stage">
         {STAGES.map((s) => {
-          const problems = rubricProblems(activeRubric(state.rubric, s));
+          const problems = [...blendProblems(blendFor(state, s)), ...rubricProblems(activeRubric(state.rubric, s))];
           return (
             <button key={s} role="tab" aria-selected={s === stage} onClick={() => switchStage(s)}
               className={cn("flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm transition-colors",
@@ -59,8 +60,18 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
   const usage = (id: string) => bundles.filter((b) => !isRubricSyncable(b) && b.criteria.some((c) => c.id === id)).length;
   const syncable = bundles.filter(isRubricSyncable);
   const frozen = bundles.filter((b) => !isRubricSyncable(b));
-  const problems = rubricProblems(drafts);
-  const dirty = JSON.stringify(drafts) !== JSON.stringify(saved);
+  const savedBlend = blendFor(state, stage);
+  const [blend, setBlend] = React.useState<StageBlend>(savedBlend);
+  const blendDirty = blend.groupWeight !== savedBlend.groupWeight || blend.individualWeight !== savedBlend.individualWeight;
+  const problems = [...blendProblems(blend), ...rubricProblems(drafts)];
+  const dirty = blendDirty || JSON.stringify(drafts) !== JSON.stringify(saved);
+  const hasIndividual = drafts.some((d) => d.scope === "individual");
+  // Frozen sessions whose blend will differ from the new template once saved
+  const keepOldBlend = frozen.filter((b) => !sessionUsesBlend(blend, b.session));
+  const setGroupShare = (g: number) => {
+    setReport(null);
+    setBlend({ groupWeight: g, individualWeight: Number.isFinite(g) ? round(100 - g, 2) : NaN });
+  };
   React.useEffect(() => onDirty(dirty), [dirty, onDirty]);
 
   const update = (id: string, patch: Partial<RubricCriterion>) => {
@@ -100,9 +111,10 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
 
   const save = () => {
     try {
-      const { state: next, report: r } = saveStageRubric(state, stage, drafts);
+      const { state: next, report: r } = saveStageRubric(state, stage, drafts, blend);
       patchState(() => next);
       setDrafts(activeRubric(next.rubric, stage)); // versioned/new criteria get new ids
+      setBlend(blendFor(next, stage));
       setReport(r);
       setError(null);
     } catch (e) {
@@ -112,10 +124,46 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Final grade = Group criteria × {DEFAULT_GRADING_CONFIG.groupWeight}% + Individual criteria × {DEFAULT_GRADING_CONFIG.individualWeight}%.
-        Weights within each section must total 100%.
-      </p>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><PieChart className="size-4" /> Final Grade Blend</CardTitle>
+          <Badge variant={blendProblems(blend).length ? "destructive" : "success"}>
+            {Number.isFinite(blend.groupWeight) ? blend.groupWeight : "–"} / {Number.isFinite(blend.individualWeight) ? blend.individualWeight : "–"}
+          </Badge>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm">
+            Each proponent&apos;s final % = <span className="font-semibold text-primary">Group score × {Number.isFinite(blend.groupWeight) ? blend.groupWeight : "–"}%</span>
+            {" "}+ <span className="font-semibold text-primary">Individual score × {Number.isFinite(blend.individualWeight) ? blend.individualWeight : "–"}%</span>
+          </p>
+          <div className="grid items-end gap-3 sm:grid-cols-[7rem_1fr_7rem]">
+            <label className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">Group share %</span>
+              <Input type="number" inputMode="decimal" min={0} max={100} step={5} className="text-right tabular-nums" aria-label="Group share percent"
+                value={Number.isFinite(blend.groupWeight) ? blend.groupWeight : ""} onChange={(e) => setGroupShare(e.target.valueAsNumber)} />
+            </label>
+            <div className="space-y-1.5 pb-2">
+              <Slider min={0} max={100} step={5} value={[Number.isFinite(blend.groupWeight) ? blend.groupWeight : 0]}
+                onValueChange={([v]) => setGroupShare(v)} aria-label="Group versus individual share" />
+              <div className="flex justify-between text-[11px] text-muted-foreground"><span>All individual</span><span>All group</span></div>
+            </div>
+            <label className="space-y-1">
+              <span className="text-[11px] text-muted-foreground">Individual share %</span>
+              <Input type="number" inputMode="decimal" min={0} max={100} step={5} className="text-right tabular-nums" aria-label="Individual share percent"
+                value={Number.isFinite(blend.individualWeight) ? blend.individualWeight : ""}
+                onChange={(e) => setGroupShare(Number.isFinite(e.target.valueAsNumber) ? round(100 - e.target.valueAsNumber, 2) : NaN)} />
+            </label>
+          </div>
+          {!hasIndividual && (
+            <p className="text-xs text-warning">This stage has no individual criteria, so proponents receive the group score and the blend has no effect.</p>
+          )}
+          {hasIndividual && blend.individualWeight === 0 && (
+            <p className="text-xs text-warning">Individual criteria are scored but count for 0% of the final grade.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      <p className="text-xs text-muted-foreground">Criterion weights within each section must total 100%.</p>
 
       {(["group", "individual"] as RubricScope[]).map((scope) => {
         const list = scoped(scope);
@@ -182,6 +230,9 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
             Saving applies to <span className="text-foreground">{syncable.length}</span> unscored {STAGE_LABEL[stage].toLowerCase()} session{syncable.length === 1 ? "" : "s"}
             {syncable.length > 0 && ` (${syncable.map((b) => b.project.group_label).join(", ")})`}.{" "}
             {frozen.length > 0 && <>{frozen.length} in-progress or locked session{frozen.length === 1 ? " keeps its" : "s keep their"} original rubric ({frozen.map((b) => b.project.group_label).join(", ")}).</>}
+            {blendDirty && keepOldBlend.length > 0 && (
+              <> {keepOldBlend.map((b) => `${b.project.group_label} stays at ${b.session.group_weight ?? 60}/${b.session.individual_weight ?? 40}`).join("; ")}.</>
+            )}
           </p>
           {problems.length > 0 && (
             <ul className="space-y-0.5 text-xs text-destructive">{problems.map((p) => <li key={p} className="flex gap-1.5"><XCircle className="mt-px size-3.5 shrink-0" />{p}</li>)}</ul>
@@ -190,11 +241,12 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
           {report && !dirty && (
             <p role="status" className="text-xs text-success">
               Saved: {report.updated} updated, {report.versioned} versioned, {report.added} added, {report.retired} retired.
+              {report.blendChanged && ` Blend set to ${savedBlend.groupWeight}/${savedBlend.individualWeight}.`}
               {" "}Applied to {report.synced.length} session{report.synced.length === 1 ? "" : "s"}; {report.frozen.length} kept their snapshot.
             </p>
           )}
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" disabled={!dirty} onClick={() => { setDrafts(saved); setError(null); }}><RotateCcw /> Discard</Button>
+            <Button variant="ghost" size="sm" disabled={!dirty} onClick={() => { setDrafts(saved); setBlend(savedBlend); setError(null); }}><RotateCcw /> Discard</Button>
             <Button size="sm" disabled={!dirty || problems.length > 0} onClick={save}><Save /> Save {STAGE_LABEL[stage]} rubric</Button>
           </div>
         </CardContent>

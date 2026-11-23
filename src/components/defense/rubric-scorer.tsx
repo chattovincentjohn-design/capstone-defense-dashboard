@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEFAULT_GRADING_CONFIG, evaluatePanelist, scoreLookup, splitCriteria, suggestVerdict, transmute, type WeightedResult } from "@/lib/grading";
+import { configFor, evaluatePanelist, scoreLookup, splitCriteria, suggestVerdict, transmute, type WeightedResult } from "@/lib/grading";
 import { canScore, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
 import type { RubricCriterion, SessionBundle } from "@/lib/types";
@@ -40,7 +40,7 @@ function Scorer({ bundle, viewer, onScore, onSubmit }: Props) {
   const editable = canScore(viewer, bundle);
   const { group, individual } = splitCriteria(bundle.criteria);
   const evaluation = evaluatePanelist(bundle, assignment);
-  const cfg = DEFAULT_GRADING_CONFIG;
+  const cfg = configFor(bundle);
   const [student, setStudent] = React.useState(bundle.members[0]?.id ?? "");
   const [confirming, setConfirming] = React.useState(false);
   const [busy, setBusy] = React.useState(false);

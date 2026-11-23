@@ -4,13 +4,15 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
-  CapstoneProject, DefenseMinutes, DefenseSession, PanelAssignment, PanelComment,
+  CapstoneProject, DefenseMinutes, DefenseSession, DefenseStage, StageBlend, PanelAssignment, PanelComment,
   ProjectMember, RubricCriterion, RubricScore, SessionBundle, Verdict,
 } from "../types";
 
 export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string): Promise<SessionBundle> {
-  const { data: session, error } = await sb.from("defense_sessions").select("*").eq("id", sessionId).single<DefenseSession>();
+  const { data: raw, error } = await sb.from("defense_sessions").select("*").eq("id", sessionId).single<DefenseSession>();
   if (error) throw error;
+  // numeric columns arrive as strings
+  const session: DefenseSession = { ...raw, group_weight: Number(raw.group_weight), individual_weight: Number(raw.individual_weight) };
 
   const [project, members, assignments, criteria, scores, comments, minutes] = await Promise.all([
     sb.from("capstone_projects").select("*").eq("id", session.project_id).single<CapstoneProject>(),
@@ -185,4 +187,18 @@ export async function syncSessionRubric(sb: SupabaseClient, sessionId: string) {
   const { data, error } = await sb.rpc("sync_session_rubric", { p_session: sessionId });
   if (error) throw error;
   return data as number;
+}
+
+export async function getStageBlends(sb: SupabaseClient): Promise<Record<DefenseStage, StageBlend>> {
+  const { data, error } = await sb.from("stage_grading_config").select("*");
+  if (error) throw error;
+  return Object.fromEntries((data ?? []).map((r) => [r.stage, { groupWeight: Number(r.group_weight), individualWeight: Number(r.individual_weight) }])) as Record<DefenseStage, StageBlend>;
+}
+
+/** Update the stage template. Then call syncSessionRubric() for each unscored session of the stage. */
+export async function setStageBlend(sb: SupabaseClient, stage: DefenseStage, blend: StageBlend) {
+  const { error } = await sb.from("stage_grading_config")
+    .update({ group_weight: blend.groupWeight, individual_weight: blend.individualWeight, updated_at: new Date().toISOString() })
+    .eq("stage", stage);
+  if (error) throw error;
 }

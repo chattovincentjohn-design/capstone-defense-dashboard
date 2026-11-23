@@ -2,7 +2,7 @@
  * Realistic seed data so the UI runs without a database.
  * Shapes are identical to Supabase rows (see lib/types.ts).
  */
-import type { RubricCriterion, RubricScore, SessionBundle, User } from "./types";
+import type { DefenseStage, RubricCriterion, RubricScore, SessionBundle, StageBlend, User } from "./types";
 
 export const USERS: User[] = [
   { id: "u-admin", full_name: "Engr. Liza M. Fernandez", email: "coordinator@demo.edu", role: "admin", department: "College of Computing Studies" },
@@ -43,6 +43,15 @@ export function seedRubric(): RubricCriterion[] {
   return [...TITLE_CRITERIA, ...PROPOSAL_CRITERIA, ...FINAL_CRITERIA].map((c) => ({ ...c, is_active: true }));
 }
 
+/** Default final-grade blend per stage (Coordinator-editable). */
+export function seedGrading(): Record<DefenseStage, StageBlend> {
+  return {
+    title: { groupWeight: 60, individualWeight: 40 },
+    proposal: { groupWeight: 60, individualWeight: 40 },
+    final: { groupWeight: 60, individualWeight: 40 },
+  };
+}
+
 function scoreRows(sessionId: string, assignmentId: string, rows: [string, string | null, number][]): RubricScore[] {
   return rows.map(([criterion_id, student_id, score]) => ({
     id: `s-${assignmentId}-${criterion_id}-${student_id ?? "g"}`,
@@ -64,6 +73,7 @@ export function seedBundles(): SessionBundle[] {
         id: S1, project_id: "p-g4", stage: "final", scheduled_at: "2026-11-23T09:00:00+08:00",
         room_or_link: "CCS Audio-Visual Room 2", secretary_id: "u-sec",
         verdict: null, is_locked: false, locked_at: null, chair_signature_hash: null,
+        group_weight: 60, individual_weight: 40,
       },
       project: {
         id: "p-g4", group_label: "Group 4", title: "IoT-Based Smart Agriculture System",
@@ -128,6 +138,7 @@ export function seedBundles(): SessionBundle[] {
         id: S2, project_id: "p-g7", stage: "proposal", scheduled_at: "2026-11-23T13:30:00+08:00",
         room_or_link: "https://meet.example.com/ccs-defense-7", secretary_id: "u-sec",
         verdict: null, is_locked: false, locked_at: null, chair_signature_hash: null,
+        group_weight: 60, individual_weight: 40,
       },
       project: {
         id: "p-g7", group_label: "Group 7", title: "AI-Assisted Enrollment Queue Management System",

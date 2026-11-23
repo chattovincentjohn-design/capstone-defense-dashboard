@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { consolidate, evaluatePanelist, transmute, suggestVerdict, weightedScore } from "../grading";
+import { configFor, consolidate, evaluatePanelist, transmute, suggestVerdict, weightedScore } from "../grading";
 import { seedBundles } from "../mock-data";
 import { canonicalScorePayload, signEvaluation } from "../signature";
 import { canSeeScoresOf, resolveViewer } from "../permissions";
@@ -91,5 +91,29 @@ describe("signature", () => {
     expect(h1).toBe(h2);
     rows[0] = { ...rows[0], score: rows[0].score + 0.1 };
     expect(await signEvaluation("u-diaz", "2026-11-23T02:41:17.000Z", rows)).not.toBe(h1);
+  });
+});
+
+describe("configFor (per-session blend)", () => {
+  it("uses the session's frozen blend", () => {
+    const b = bundle();
+    b.session = { ...b.session, group_weight: 70, individual_weight: 30 };
+    const diaz = b.assignments.find((a) => a.id === "pa-2-diaz")!;
+    const e = evaluatePanelist(b, diaz);
+    expect(e.finals["m-g4-1"]).toBeCloseTo(81.8 * 0.7 + 89 * 0.3, 2);
+    expect(consolidate(b).students[0].finalPercent).toBeCloseTo(81.8 * 0.7 + 89 * 0.3, 2);
+  });
+  it("falls back to 60/40 for legacy sessions without a blend", () => {
+    const b = bundle();
+    const legacy = { ...b, session: { ...b.session } } as typeof b;
+    delete (legacy.session as Partial<typeof legacy.session>).group_weight;
+    delete (legacy.session as Partial<typeof legacy.session>).individual_weight;
+    expect(configFor(legacy)).toMatchObject({ groupWeight: 60, individualWeight: 40 });
+  });
+  it("100/0 makes the final equal the group score", () => {
+    const b = bundle();
+    b.session = { ...b.session, group_weight: 100, individual_weight: 0 };
+    const e = evaluatePanelist(b, b.assignments.find((a) => a.id === "pa-2-diaz")!);
+    expect(e.finals["m-g4-2"]).toBe(81.8);
   });
 });

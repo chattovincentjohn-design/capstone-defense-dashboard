@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { consolidate } from "../grading";
 import {
-  activeRubric, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
+  activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
-import { seedBundles, seedRubric, USERS } from "../mock-data";
+import { seedBundles, seedGrading, seedRubric, USERS } from "../mock-data";
 import type { State } from "../store";
 
 function state(): State {
@@ -12,6 +13,7 @@ function state(): State {
     bundles: Object.fromEntries(bundles.map((b) => [b.session.id, b])),
     order: bundles.map((b) => b.session.id),
     rubric: seedRubric(),
+    grading: seedGrading(),
     currentUserId: "u-admin",
     hydrated: true,
   };
@@ -134,5 +136,46 @@ describe("gradesCsv", () => {
     const lines = gradesCsv([b], USERS).split("\r\n");
     expect(lines).toHaveLength(4);
     expect(lines[1]).toContain("IoT-Based Smart Agriculture System");
+  });
+});
+
+describe("per-stage grade blend", () => {
+  it("validates shares", () => {
+    expect(blendProblems({ groupWeight: 70, individualWeight: 30 })).toEqual([]);
+    expect(blendProblems({ groupWeight: 70, individualWeight: 40 })[0]).toMatch(/110%/);
+    expect(blendProblems({ groupWeight: NaN, individualWeight: 40 })).toHaveLength(1);
+    expect(blendProblems({ groupWeight: 100, individualWeight: 0 })).toEqual([]);
+  });
+
+  it("applies a new blend to unscored sessions only", () => {
+    const s = state();
+    const { state: s2, report } = saveStageRubric(s, "final", activeRubric(s.rubric, "final"), { groupWeight: 70, individualWeight: 30 });
+    expect(report.blendChanged).toBe(true);
+    expect(s2.grading.final).toEqual({ groupWeight: 70, individualWeight: 30 });
+    // Group 4 is scored → keeps 60/40, so its grades do not move
+    expect(s2.bundles["sess-g4-final"].session).toMatchObject({ group_weight: 60, individual_weight: 40 });
+    expect(consolidate(s2.bundles["sess-g4-final"]).overallPercent).toBe(consolidate(s.bundles["sess-g4-final"]).overallPercent);
+
+    const { state: s3 } = saveStageRubric(s, "proposal", activeRubric(s.rubric, "proposal"), { groupWeight: 50, individualWeight: 50 });
+    expect(s3.bundles["sess-g7-proposal"].session).toMatchObject({ group_weight: 50, individual_weight: 50 });
+  });
+
+  it("rejects an invalid blend on save", () => {
+    const s = state();
+    expect(() => saveStageRubric(s, "final", activeRubric(s.rubric, "final"), { groupWeight: 80, individualWeight: 30 })).toThrow(/110%/);
+  });
+
+  it("stamps the stage blend on new sessions and on stage change", () => {
+    const s = { ...state(), grading: { ...seedGrading(), title: { groupWeight: 80, individualWeight: 20 }, proposal: { groupWeight: 50, individualWeight: 50 } } };
+    const { state: s2, sessionId } = scheduleSession(s, draft(), USERS);
+    expect(s2.bundles[sessionId].session).toMatchObject({ group_weight: 80, individual_weight: 20 });
+    const projectId = s2.bundles[sessionId].project.id;
+    const s3 = updateScheduledSession(s2, draft({ sessionId, projectId, newProject: undefined, stage: "proposal" }), USERS);
+    expect(s3.bundles[sessionId].session).toMatchObject({ group_weight: 50, individual_weight: 50 });
+  });
+
+  it("blocks scheduling when the stage blend is invalid", () => {
+    const s = { ...state(), grading: { ...seedGrading(), title: { groupWeight: 90, individualWeight: 20 } } };
+    expect(errors(s, draft()).join()).toMatch(/grade blend is not ready/);
   });
 });
