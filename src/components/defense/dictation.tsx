@@ -27,7 +27,6 @@ function recognitionCtor(): RecognitionCtor | null {
 export const DICTATION_LANGUAGES = [
   { code: "en-PH", label: "English" },
   { code: "fil-PH", label: "Filipino" },
-  { code: "ceb-PH", label: "Cebuano (Bisaya)" },
 ] as const;
 
 const ERRORS: Record<string, string> = {
@@ -50,7 +49,10 @@ export function DictationButton({ onText, disabled = false }: { onText: (spoken:
   const [interim, setInterim] = React.useState("");
   const [error, setError] = React.useState<string | null>(null);
   const [lang, setLang] = React.useState<string>(() => {
-    try { return localStorage.getItem("cdems-dictation-lang") ?? "en-PH"; } catch { return "en-PH"; }
+    try {
+      const saved = localStorage.getItem("cdems-dictation-lang");
+      return DICTATION_LANGUAGES.some((l) => l.code === saved) ? saved! : "en-PH";
+    } catch { return "en-PH"; }
   });
   const rec = React.useRef<Recognition | null>(null);
   const onTextRef = React.useRef(onText);
@@ -109,7 +111,7 @@ export function DictationButton({ onText, disabled = false }: { onText: (spoken:
             <Mic /> Speak
           </Button>
         )}
-        <NativeSelect aria-label="Voice input language" className="h-8 w-40 text-xs" value={lang} disabled={listening}
+        <NativeSelect aria-label="Voice input language" className="h-8 w-32 text-xs" value={lang} disabled={listening}
           onChange={(e) => { setLang(e.target.value); try { localStorage.setItem("cdems-dictation-lang", e.target.value); } catch { /* ignore */ } }}>
           {DICTATION_LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
         </NativeSelect>
