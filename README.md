@@ -2,6 +2,12 @@
 
 Next.js 15 (App Router) · TypeScript · Tailwind v4 · shadcn/ui (Radix) · Supabase (Postgres + Auth + Realtime)
 
+## Install on a computer (desktop shortcut)
+
+CDEMS is an installable web app. In Chrome or Edge, open the site and click **Install CDEMS** on the home
+page (or the install icon in the address bar): it adds a desktop and Start-menu shortcut with the SCS seal
+and opens in its own window. Alternatively download `/CDEMS.url` and place it on the desktop.
+
 ## Run the demo (no database needed)
 
 ```bash

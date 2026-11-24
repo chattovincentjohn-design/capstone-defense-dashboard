@@ -1,5 +1,6 @@
 "use client";
 import { BrandLogo } from "@/components/app/brand";
+import { InstallApp } from "@/components/app/install-app";
 import Link from "next/link";
 import { CalendarClock, RotateCcw, Send, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,7 @@ export default function Home() {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <InstallApp />
           {(currentUser.role === "admin" || currentUser.role === "superadmin") && (
             <Button asChild size="sm" variant="outline"><Link href="/admin"><Settings2 /> {currentUser.role === "superadmin" ? "Super admin console" : "Coordinator console"}</Link></Button>
           )}

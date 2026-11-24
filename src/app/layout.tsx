@@ -10,7 +10,12 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 export const metadata: Metadata = {
   title: "CDEMS · Capstone Defense Evaluation and Management System",
   description: "Rubric-based grading, blind score aggregation, revision tracking and defense minutes.",
+  applicationName: "CDEMS",
+  icons: { apple: "/icon-192.png" },
+  appleWebApp: { capable: true, title: "CDEMS", statusBarStyle: "black-translucent" },
 };
+
+export const viewport = { themeColor: "#0a1726" };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
