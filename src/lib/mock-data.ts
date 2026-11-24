@@ -74,6 +74,7 @@ export function seedBundles(): SessionBundle[] {
         id: S1, project_id: "p-g4", stage: "final", scheduled_at: "2026-11-23T09:00:00+08:00",
         room_or_link: "CCS Audio-Visual Room 2", secretary_id: "u-sec",
         verdict: null, is_locked: false, locked_at: null, chair_signature_hash: null,
+        started_at: "2026-11-23T09:05:00+08:00", started_by: "u-ramos",
         group_weight: 60, individual_weight: 40,
       },
       project: {

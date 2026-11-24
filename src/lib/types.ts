@@ -68,6 +68,9 @@ export interface DefenseSession {
   is_locked: boolean;
   locked_at: string | null;
   chair_signature_hash: string | null;
+  /** Set when the Defense Chair or Coordinator starts the defense; ratings are allowed only after this. */
+  started_at?: string | null;
+  started_by?: string | null;
   /** Final-grade blend frozen at scheduling time (sums to 100). Missing on legacy rows → 60/40. */
   group_weight: number;
   individual_weight: number;

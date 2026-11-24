@@ -439,3 +439,23 @@ describe("defense requests", () => {
     expect(manuscriptFileProblem({ name: "e.pdf", type: "application/pdf", size: 0 })).toMatch(/empty/);
   });
 });
+
+describe("starting a defense", () => {
+  it("blocks ratings until the Chair or Coordinator starts the defense", async () => {
+    const { applyScore } = await import("../store");
+    const { canScore, canStartDefense } = await import("../permissions");
+    const b = state().bundles["sess-g7-proposal"];
+    expect(b.session.started_at ?? null).toBeNull();
+    const a = b.assignments[0];
+    const panelist = resolveViewer(USERS.find((u) => u.id === a.faculty_id)!, b);
+    expect(canScore(panelist, b)).toBe(false);
+    expect(applyScore(b, a.id, b.criteria[0].id, null, 4)).toBe(b);   // ignored
+    const chair = b.assignments.find((x) => x.panel_role === "chair")!;
+    expect(canStartDefense(resolveViewer(USERS.find((u) => u.id === chair.faculty_id)!, b), b)).toBe(true);
+    expect(canStartDefense(resolveViewer(USERS.find((u) => u.id === "u-admin")!, b), b)).toBe(true);
+    const member = b.assignments.find((x) => x.panel_role === "member")!;
+    expect(canStartDefense(resolveViewer(USERS.find((u) => u.id === member.faculty_id)!, b), b)).toBe(false);
+    const started = { ...b, session: { ...b.session, started_at: new Date().toISOString() } };
+    expect(canScore(resolveViewer(USERS.find((u) => u.id === a.faculty_id)!, started), started)).toBe(true);
+  });
+});

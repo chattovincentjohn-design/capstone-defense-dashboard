@@ -20,7 +20,7 @@ import type {
 } from "./types";
 import { uid } from "./utils";
 
-const STORAGE_KEY = "cdms-demo-state-v2";
+const STORAGE_KEY = "cdms-demo-state-v3";
 
 export interface State {
   bundles: Record<string, SessionBundle>;
@@ -61,6 +61,8 @@ export interface StoreOps {
   setScore(sessionId: string, assignmentId: string, criterionId: string, studentId: string | null, score: number): void;
   submitEvaluation(sessionId: string, assignmentId: string): Promise<void>;
   finalize(sessionId: string, verdict: Verdict): Promise<void>;
+  /** Defense Chair or Coordinator: allow the panel to start entering ratings. */
+  startDefense(sessionId: string): Promise<void>;
   addComment(sessionId: string, c: NewComment): Promise<void>;
   deleteComment(sessionId: string, commentId: string): Promise<void>;
   resolveRevision(sessionId: string, commentId: string, resolved: boolean, note: string, reference: string): Promise<void>;
@@ -141,7 +143,7 @@ export const StoreContext = React.createContext<StoreCtx | null>(null);
 // ---------------------------------------------------------------------------
 export function applyScore(b: SessionBundle, assignmentId: string, criterionId: string, studentId: string | null, score: number): SessionBundle {
   const a = b.assignments.find((x) => x.id === assignmentId);
-  if (!a || a.has_submitted || b.session.is_locked) return b;
+  if (!a || a.has_submitted || b.session.is_locked || !b.session.started_at) return b;
   const idx = b.scores.findIndex((s) => s.panel_assignment_id === assignmentId && s.criterion_id === criterionId && s.student_id === studentId);
   const scores = [...b.scores];
   if (idx >= 0) scores[idx] = { ...scores[idx], score };
@@ -293,6 +295,12 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
           ...bb,
           assignments: bb.assignments.map((x) => (x.id === assignmentId ? { ...x, has_submitted: true, submitted_at: ts, signature_hash: hash } : x)),
         }));
+      },
+      async startDefense(sessionId) {
+        const s = stateRef.current;
+        const b = s.bundles[sessionId];
+        if (!b || b.session.is_locked || b.session.started_at) return;
+        patch(sessionId, (bb) => ({ ...bb, session: { ...bb.session, started_at: new Date().toISOString(), started_by: s.currentUserId } }));
       },
       async finalize(sessionId, verdict) {
         const b = stateRef.current.bundles[sessionId];
@@ -708,6 +716,7 @@ export function useDefenseSession(sessionId: string) {
       ops.setScore(sessionId, assignmentId, criterionId, studentId, score),
     submitEvaluation: (assignmentId: string) => ops.submitEvaluation(sessionId, assignmentId),
     finalize: (verdict: Verdict) => ops.finalize(sessionId, verdict),
+    startDefense: () => ops.startDefense(sessionId),
     addComment: (c: NewComment) => { void ops.addComment(sessionId, c); },
     deleteComment: (commentId: string) => { void ops.deleteComment(sessionId, commentId); },
     resolveRevision: (commentId: string, resolved: boolean, note: string, reference: string) => {

@@ -13,7 +13,11 @@ import { PanelStatusList } from "./panel-status";
 import { RevisionTracker } from "./revision-tracker";
 import { RubricScorer } from "./rubric-scorer";
 import { WorkspaceHeader } from "./workspace-header";
-import { allSubmitted } from "@/lib/permissions";
+import { allSubmitted, canStartDefense, type Viewer } from "@/lib/permissions";
+import type { SessionBundle, User } from "@/lib/types";
+import { fmtDateTime } from "@/lib/utils";
+import { Lock as LockIcon, Play } from "lucide-react";
+import * as React from "react";
 import { ROLE_LABEL } from "@/lib/types";
 
 export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
@@ -61,6 +65,7 @@ export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
 
         {/* RIGHT — Evaluation & Feedback */}
         <div className="flex min-w-0 flex-col gap-4">
+          <StartBar bundle={bundle} viewer={viewer} userById={userById} onStart={actions.startDefense} />
           <Card className="overflow-hidden">
             <Tabs defaultValue={rightDefault}>
               <TabsList>
@@ -98,4 +103,56 @@ export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
       </main>
     </div>
   );
+}
+
+/** Rating opens only after the Defense Chair or a Coordinator starts the defense. */
+function StartBar({ bundle, viewer, userById, onStart }: {
+  bundle: SessionBundle; viewer: Viewer; userById: (id: string) => User | undefined; onStart: () => Promise<void>;
+}) {
+  const [confirming, setConfirming] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const { session } = bundle;
+  if (session.is_locked) return null;
+  if (session.started_at) {
+    return (
+      <p className="flex items-center gap-1.5 text-xs text-success">
+        <Play className="size-3.5" /> Defense started {fmtDateTime(session.started_at)}
+        {session.started_by ? ` by ${userById(session.started_by)?.full_name ?? "the Chair"}` : ""}. The panel can enter ratings.
+      </p>
+    );
+  }
+  if (canStartDefense(viewer, bundle)) {
+    return (
+      <Card className="border-warning/50">
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div>
+            <p className="flex items-center gap-1.5 font-semibold"><LockIcon className="size-4 text-warning" /> Rating is locked until you start the defense</p>
+            <p className="text-xs text-muted-foreground">Start it when the group begins presenting. Panel members can then enter their ratings.</p>
+          </div>
+          {confirming ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">Start now? This cannot be undone.</span>
+              <Button size="sm" disabled={busy} onClick={async () => { setBusy(true); await onStart(); setBusy(false); setConfirming(false); }}>
+                <Play /> {busy ? "Starting…" : "Start"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>Cancel</Button>
+            </div>
+          ) : (
+            <Button onClick={() => setConfirming(true)}><Play /> Start defense</Button>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+  if (viewer.isPanelist) {
+    return (
+      <Card className="border-warning/50">
+        <CardContent className="flex items-center gap-2 p-4 text-sm">
+          <LockIcon className="size-4 shrink-0 text-warning" />
+          <span>Waiting for the Defense Chair or the Coordinator to start the defense. Your rubric unlocks automatically when they do.</span>
+        </CardContent>
+      </Card>
+    );
+  }
+  return <p className="text-xs text-muted-foreground">The defense has not started yet.</p>;
 }

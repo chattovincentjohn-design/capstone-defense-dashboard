@@ -375,7 +375,7 @@ export function scheduleSession(state: State, draft: ScheduleDraft, users: User[
       id: sessionId, project_id: project.id, stage: draft.stage, scheduled_at: draft.scheduledAt,
       group_weight: blendFor(state, draft.stage).groupWeight, individual_weight: blendFor(state, draft.stage).individualWeight,
       room_or_link: draft.room.trim(), secretary_id: draft.secretaryId, verdict: null, is_locked: false,
-      locked_at: null, chair_signature_hash: null,
+      locked_at: null, chair_signature_hash: null, started_at: null, started_by: null,
     },
     project, members, assignments, criteria: snapshot(state.rubric, draft.stage), scores: [], comments: [], minutes,
   };

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { configFor, evaluatePanelist, scoreLookup, splitCriteria, suggestVerdict, transmute, type WeightedResult } from "@/lib/grading";
-import { canScore, type Viewer } from "@/lib/permissions";
+import { canScore, isStarted, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
 import type { RubricCriterion, SessionBundle } from "@/lib/types";
 import { VERDICT_LABEL } from "@/lib/types";
@@ -53,6 +53,11 @@ function Scorer({ bundle, viewer, onScore, onSubmit }: Props) {
 
   return (
     <div className="flex flex-col">
+      {!isStarted(bundle) && (
+        <p className="border-b bg-warning/10 px-4 py-2 text-xs text-warning">
+          Rating is locked until the Defense Chair or the Coordinator starts the defense.
+        </p>
+      )}
       <Tabs defaultValue="group">
         <TabsList>
           <TabsTrigger value="group">Group Grading ({cfg.groupWeight}%)</TabsTrigger>

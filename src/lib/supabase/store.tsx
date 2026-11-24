@@ -205,6 +205,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await repo.submitEvaluation(sb, sessionId);
     }),
     finalize: (sessionId, verdict) => attempt(sessionId, () => repo.finalizeDefense(sb, sessionId, verdict)),
+    startDefense: (sessionId) => attempt(sessionId, () => repo.startDefense(sb, sessionId)),
     addComment: (sessionId, c) => attempt(sessionId, () => repo.addComment(sb, { ...c, session_id: sessionId })),
     deleteComment: (sessionId, id) => attempt(sessionId, () => repo.deleteComment(sb, id)),
     resolveRevision: (sessionId, id, resolved, note, ref) =>

@@ -44,8 +44,14 @@ export function canSeeScoresOf(v: Viewer, target: PanelAssignment, b: SessionBun
 export const canViewSession = (v: Viewer) =>
   v.isAdmin || v.isPanelist || v.isSecretary || v.isAdviser || v.isStudent;
 
+export const isStarted = (b: SessionBundle) => !!b.session.started_at || b.session.is_locked;
+
 export const canScore = (v: Viewer, b: SessionBundle) =>
-  !!v.assignment && !v.assignment.has_submitted && !b.session.is_locked;
+  !!v.assignment && !v.assignment.has_submitted && !b.session.is_locked && isStarted(b);
+
+/** start_defense() RPC: the Defense Chair or a Coordinator opens rating. */
+export const canStartDefense = (v: Viewer, b: SessionBundle) =>
+  (v.isChair || v.isAdmin) && !b.session.is_locked && !b.session.started_at;
 
 export const canComment = (v: Viewer, b: SessionBundle) => !!v.assignment && !b.session.is_locked;
 

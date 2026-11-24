@@ -490,3 +490,8 @@ export async function completeDefenseRequest(sb: SupabaseClient, id: string) {
   const { error } = await sb.rpc("complete_defense_request", { p_request: id });
   if (error) throw error;
 }
+
+export async function startDefense(sb: SupabaseClient, sessionId: string) {
+  const { error } = await sb.rpc("start_defense", { p_session: sessionId });
+  if (error) throw error;
+}
