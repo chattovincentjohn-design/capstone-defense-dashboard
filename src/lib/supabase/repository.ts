@@ -495,3 +495,8 @@ export async function startDefense(sb: SupabaseClient, sessionId: string) {
   const { error } = await sb.rpc("start_defense", { p_session: sessionId });
   if (error) throw error;
 }
+
+export async function timerAction(sb: SupabaseClient, sessionId: string, action: import("../timer").TimerAction, phases?: import("../timer").TimerPhase[]) {
+  const { error } = await sb.rpc("timer_action", { p_session: sessionId, p_action: action, p_phases: phases ?? null });
+  if (error) throw error;
+}

@@ -18,6 +18,7 @@ import type {
   AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseRequest, DefenseRequestInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
+import { applyTimerAction, type TimerAction, type TimerPhase } from "./timer";
 import { uid } from "./utils";
 
 const STORAGE_KEY = "cdms-demo-state-v3";
@@ -63,6 +64,8 @@ export interface StoreOps {
   finalize(sessionId: string, verdict: Verdict): Promise<void>;
   /** Defense Chair or Coordinator: allow the panel to start entering ratings. */
   startDefense(sessionId: string): Promise<void>;
+  /** Defense Chair (or Coordinator): control the shared timer, or change its parts. */
+  timerAction(sessionId: string, action: TimerAction, phases?: TimerPhase[]): Promise<void>;
   addComment(sessionId: string, c: NewComment): Promise<void>;
   deleteComment(sessionId: string, commentId: string): Promise<void>;
   resolveRevision(sessionId: string, commentId: string, resolved: boolean, note: string, reference: string): Promise<void>;
@@ -295,6 +298,12 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
           ...bb,
           assignments: bb.assignments.map((x) => (x.id === assignmentId ? { ...x, has_submitted: true, submitted_at: ts, signature_hash: hash } : x)),
         }));
+      },
+      async timerAction(sessionId, action, phases) {
+        const b = stateRef.current.bundles[sessionId];
+        if (!b || b.session.is_locked) return;
+        const timer = applyTimerAction(b.session.timer, action, Date.now(), phases);
+        patch(sessionId, (bb) => ({ ...bb, session: { ...bb.session, timer } }));
       },
       async startDefense(sessionId) {
         const s = stateRef.current;
@@ -717,6 +726,7 @@ export function useDefenseSession(sessionId: string) {
     submitEvaluation: (assignmentId: string) => ops.submitEvaluation(sessionId, assignmentId),
     finalize: (verdict: Verdict) => ops.finalize(sessionId, verdict),
     startDefense: () => ops.startDefense(sessionId),
+    timerAction: (action: TimerAction, phases?: TimerPhase[]) => ops.timerAction(sessionId, action, phases),
     addComment: (c: NewComment) => { void ops.addComment(sessionId, c); },
     deleteComment: (commentId: string) => { void ops.deleteComment(sessionId, commentId); },
     resolveRevision: (commentId: string, resolved: boolean, note: string, reference: string) => {

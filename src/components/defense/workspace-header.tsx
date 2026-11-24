@@ -8,10 +8,14 @@ import { DefenseTimer } from "./defense-timer";
 import { panelState } from "./panel-status";
 import { RoleSwitcher } from "./role-switcher";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle, type User } from "@/lib/types";
+import type { TimerAction, TimerPhase } from "@/lib/timer";
 import { fmtDateTime } from "@/lib/utils";
 
-export function WorkspaceHeader({ bundle, order, userById }: {
+export function WorkspaceHeader({ bundle, order, userById, canControlTimer = false, onTimer }: {
   bundle: SessionBundle; order: string[]; userById: (id: string) => User | undefined;
+  /** Defense Chair (or Coordinator) controls the shared timer. */
+  canControlTimer?: boolean;
+  onTimer?: (action: TimerAction, phases?: TimerPhase[]) => Promise<void> | void;
 }) {
   const { session, project, members, assignments } = bundle;
   const idx = order.indexOf(session.id);
@@ -19,7 +23,7 @@ export function WorkspaceHeader({ bundle, order, userById }: {
   const next = order[(idx + 1) % order.length];
 
   return (
-    <header className="border-b bg-card/80 backdrop-blur">
+    <header className="relative z-40 border-b bg-card/80 backdrop-blur">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 border-b px-3 py-2">
         <Button asChild size="icon" variant="ghost" aria-label="All sessions"><Link href="/"><Menu /></Link></Button>
         <h1 className="flex flex-1 items-center justify-center gap-2 text-center text-sm font-bold uppercase tracking-wider sm:text-lg">
@@ -51,7 +55,7 @@ export function WorkspaceHeader({ bundle, order, userById }: {
             <h2 className="text-center text-base font-semibold">{project.group_label}: {project.title}</h2>
           </div>
           <div className="flex flex-wrap items-center justify-center gap-2">
-            <DefenseTimer disabled={session.is_locked} />
+            <DefenseTimer timer={session.timer} locked={session.is_locked} canControl={canControlTimer} onAction={(a, ph) => onTimer?.(a, ph)} />
             <div className="rounded-md border border-primary/40 bg-secondary/50 px-3 py-1.5 text-sm">
               <span className="font-semibold">VERDICT: </span>
               {session.verdict ? (

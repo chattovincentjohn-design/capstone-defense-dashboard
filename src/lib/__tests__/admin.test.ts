@@ -461,3 +461,33 @@ describe("voice input", () => {
     expect(appendDictation("Keep this ", "   ")).toBe("Keep this ");
   });
 });
+
+describe("shared defense timer", () => {
+  it("counts down, pauses, moves to the next part and goes into overtime", async () => {
+    const { applyTimerAction, remainingSeconds, defaultTimer } = await import("../timer");
+    const t0 = 1_000_000_000_000;
+    let t = applyTimerAction(null, "start", t0);
+    expect(remainingSeconds(t, t0)).toBe(20 * 60);
+    expect(remainingSeconds(t, t0 + 90_000)).toBe(20 * 60 - 90);
+    t = applyTimerAction(t, "pause", t0 + 90_000);
+    expect(t.running).toBe(false);
+    expect(remainingSeconds(t, t0 + 999_999)).toBe(20 * 60 - 90);       // frozen while paused
+    t = applyTimerAction(t, "start", t0 + 200_000);
+    expect(remainingSeconds(t, t0 + 200_000 + 30_000)).toBe(20 * 60 - 120);
+    expect(remainingSeconds(t, t0 + 200_000 + 20 * 60_000)).toBeLessThan(0); // overtime
+    t = applyTimerAction(t, "next", t0 + 300_000);
+    expect(t.phase).toBe(1);
+    expect(remainingSeconds(t, t0 + 999_999)).toBe(20 * 60);
+    t = applyTimerAction(applyTimerAction(t, "next"), "next");
+    expect(t.phase).toBe(0);                                            // wraps around
+    expect(defaultTimer().phases.map((p) => p.minutes)).toEqual([20, 20, 15]);
+  });
+  it("lets the Chair change the parts, within limits", async () => {
+    const { applyTimerAction, timerPhaseProblems } = await import("../timer");
+    const t = applyTimerAction(null, "configure", 0, [{ label: " Presentation ", minutes: 10 }, { label: "Q&A", minutes: 15 }]);
+    expect(t.phases).toEqual([{ label: "Presentation", minutes: 10 }, { label: "Q&A", minutes: 15 }]);
+    expect(timerPhaseProblems([])).toContain("Set 1 to 6 parts.");
+    expect(timerPhaseProblems([{ label: "", minutes: 0 }]).length).toBe(2);
+    expect(() => applyTimerAction(null, "configure", 0, [{ label: "X", minutes: 500 }])).toThrow(/1 to 180/);
+  });
+});

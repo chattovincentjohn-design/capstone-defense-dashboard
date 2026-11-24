@@ -34,7 +34,8 @@ export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
 
   return (
     <div className="min-h-screen">
-      <WorkspaceHeader bundle={bundle} order={order} userById={userById} />
+      <WorkspaceHeader bundle={bundle} order={order} userById={userById}
+        canControlTimer={viewer.isChair || viewer.isAdmin} onTimer={actions.timerAction} />
 
       <p className="px-4 pt-3 text-xs text-muted-foreground">
         Signed in as <span className="text-foreground">{currentUser.full_name}</span> ·{" "}

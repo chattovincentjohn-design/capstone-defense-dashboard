@@ -71,6 +71,8 @@ export interface DefenseSession {
   /** Set when the Defense Chair or Coordinator starts the defense; ratings are allowed only after this. */
   started_at?: string | null;
   started_by?: string | null;
+  /** Shared timer controlled by the Defense Chair (see lib/timer.ts). */
+  timer?: import("./timer").TimerState | null;
   /** Final-grade blend frozen at scheduling time (sums to 100). Missing on legacy rows → 60/40. */
   group_weight: number;
   individual_weight: number;
