@@ -141,6 +141,8 @@ export interface QAEntry {
   question: string;
   response: string;
   action_required: string;
+  /** Set when the Secretary brought this row in from a panel member's comment. */
+  comment_id?: string;
 }
 
 export interface DefenseMinutes {

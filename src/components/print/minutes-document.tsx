@@ -9,6 +9,10 @@ export function MinutesDocument({ bundle, viewer, userById }: { bundle: SessionB
   const name = (id: string | null | undefined) => userById(id ?? "")?.full_name ?? "";
   const chair = bundle.assignments.find((a) => a.panel_role === "chair");
   const mandatory = bundle.comments.filter((c) => c.severity === "mandatory");
+  // Every panel member's questions and recommendations, consolidated under their name
+  const byPanelist = bundle.assignments
+    .map((a) => ({ id: a.id, name: name(a.faculty_id), chair: a.panel_role === "chair", comments: bundle.comments.filter((c) => c.panel_assignment_id === a.id) }))
+    .filter((g) => g.comments.length > 0);
 
   return (
     <PrintShell sessionId={session.id} draft={!m.chair_approved_at}>
@@ -43,7 +47,7 @@ export function MinutesDocument({ bundle, viewer, userById }: { bundle: SessionB
             </thead>
             <tbody>
               {m.qa_entries_json.length === 0 && <tr><td colSpan={4} className="text-center">No questions recorded.</td></tr>}
-              {m.qa_entries_json.map((q) => (
+              {[...m.qa_entries_json].sort((a, b) => a.timestamp.localeCompare(b.timestamp)).map((q) => (
                 <tr key={q.id} className="align-top">
                   <td className="text-center">{fmtTime(q.timestamp)}</td>
                   <td><b>{name(q.panelist_id)}:</b> {q.question}</td>
@@ -57,7 +61,28 @@ export function MinutesDocument({ bundle, viewer, userById }: { bundle: SessionB
           <h2 className="mb-1 font-bold">III. Deliberation</h2>
           <p className="mb-4 min-h-12 whitespace-pre-wrap border border-black p-2 text-[10pt]">{m.deliberation_notes || "—"}</p>
 
-          <h2 className="mb-1 font-bold">IV. Required Revisions</h2>
+          <h2 className="mb-1 font-bold">IV. Recommendations of the Panel</h2>
+          {byPanelist.length === 0 ? (
+            <p className="mb-4 text-[10pt]">None recorded.</p>
+          ) : (
+            <div className="mb-4 space-y-2 text-[10pt]">
+              {byPanelist.map((g) => (
+                <div key={g.id} className="break-inside-avoid">
+                  <p className="font-bold">{g.name}{g.chair ? " (Chair)" : ""}</p>
+                  <ol className="list-decimal pl-6">
+                    {g.comments.map((c) => (
+                      <li key={c.id}>
+                        {c.comment_text}{" "}
+                        <span className="text-neutral-600">[{CATEGORY_LABEL[c.category]}{c.severity === "mandatory" ? " · Mandatory" : " · Suggestion"}]</span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <h2 className="mb-1 font-bold">V. Required Revisions</h2>
           <ol className="mb-4 list-decimal pl-6 text-[10pt]">
             {mandatory.length === 0 && <li>None.</li>}
             {mandatory.map((c) => <li key={c.id}>[{CATEGORY_LABEL[c.category]}] {c.comment_text}</li>)}

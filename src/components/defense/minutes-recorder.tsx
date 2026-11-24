@@ -1,13 +1,15 @@
 "use client";
 import * as React from "react";
-import { Play, Plus, Square, Trash2 } from "lucide-react";
+import { Check, ListPlus, Play, Plus, Square, Trash2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { canEditMinutes, canReadMinutes, type Viewer } from "@/lib/permissions";
-import type { DefenseMinutes, QAEntry, SessionBundle, User } from "@/lib/types";
+import { buildAttendance } from "@/lib/admin";
+import { CATEGORY_LABEL, SEVERITY_LABEL, type DefenseMinutes, type PanelComment, type QAEntry, type SessionBundle, type User } from "@/lib/types";
 import { fmtTime, uid } from "@/lib/utils";
 
 export function MinutesRecorder({ bundle, viewer, userById, onUpdate }: {
@@ -22,6 +24,32 @@ export function MinutesRecorder({ bundle, viewer, userById, onUpdate }: {
   const m = bundle.minutes;
   const editable = canEditMinutes(viewer, bundle);
   const panel = bundle.assignments.map((a) => userById(a.faculty_id)).filter(Boolean) as User[];
+  const users = bundle.assignments.map((a) => userById(a.faculty_id)).filter(Boolean) as User[];
+  const extraUsers = [bundle.project.adviser_id].map((id) => (id ? userById(id) : undefined)).filter(Boolean) as User[];
+  const attendanceIfEmpty = (mm: DefenseMinutes) => mm.attendance_json.length ? mm.attendance_json : buildAttendance(
+    bundle.assignments.map((a) => ({ id: a.faculty_id, role: a.panel_role === "chair" ? "Chair" : "Panel Member" })),
+    bundle.project.adviser_id, bundle.members, [...users, ...extraUsers]);
+
+  // Panel members' comments that the Secretary consolidates into the minutes
+  const consolidated = new Set(m.qa_entries_json.map((q) => q.comment_id).filter(Boolean));
+  const byPanelist = bundle.assignments.map((a) => ({
+    assignment: a,
+    name: userById(a.faculty_id)?.full_name ?? "Panel member",
+    comments: bundle.comments.filter((c) => c.panel_assignment_id === a.id),
+  })).filter((g) => g.comments.length > 0);
+  const pending = byPanelist.flatMap((g) => g.comments.filter((c) => !consolidated.has(c.id)).map((c) => ({ c, facultyId: g.assignment.faculty_id })));
+  const toEntry = (c: PanelComment, facultyId: string): QAEntry => ({
+    id: uid("qa"), timestamp: c.created_at ?? new Date().toISOString(), panelist_id: facultyId,
+    question: c.comment_text, response: "",
+    action_required: `${SEVERITY_LABEL[c.severity]} · ${CATEGORY_LABEL[c.category]}`, comment_id: c.id,
+  });
+  const consolidate = (items: { c: PanelComment; facultyId: string }[]) =>
+    onUpdate((mm) => {
+      const have = new Set(mm.qa_entries_json.map((q) => q.comment_id).filter(Boolean));
+      const fresh = items.filter(({ c }) => !have.has(c.id)).map(({ c, facultyId }) => toEntry(c, facultyId));
+      return { ...mm, qa_entries_json: [...mm.qa_entries_json, ...fresh] };
+    });
+
   const setQA = (id: string, patch: Partial<QAEntry>) =>
     onUpdate((mm) => ({ ...mm, qa_entries_json: mm.qa_entries_json.map((q) => (q.id === id ? { ...q, ...patch } : q)) }));
 
@@ -34,11 +62,58 @@ export function MinutesRecorder({ bundle, viewer, userById, onUpdate }: {
         </span>
         {editable && (
           <div className="flex gap-1">
-            {!m.started_at && <Button size="sm" variant="outline" onClick={() => onUpdate((mm) => ({ ...mm, started_at: new Date().toISOString() }))}><Play /> Start</Button>}
+            {!m.started_at && <Button size="sm" variant="outline" onClick={() => onUpdate((mm) => ({ ...mm, started_at: new Date().toISOString(), attendance_json: attendanceIfEmpty(mm) }))}><Play /> Start</Button>}
             {m.started_at && !m.ended_at && <Button size="sm" variant="outline" onClick={() => onUpdate((mm) => ({ ...mm, ended_at: new Date().toISOString() }))}><Square /> End</Button>}
           </div>
         )}
       </div>
+
+      {(editable || viewer.isSecretary) && (
+        <section className="rounded-md border border-primary/40 bg-primary/5 p-3">
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            <h4 className="text-sm font-semibold">Panel comments to consolidate</h4>
+            {editable && pending.length > 0 && (
+              <Button size="sm" onClick={() => consolidate(pending)}><ListPlus /> Add all to minutes ({pending.length})</Button>
+            )}
+          </div>
+          {byPanelist.length === 0 ? (
+            <p className="text-xs text-muted-foreground">Panel members&apos; questions and recommendations appear here as they log them in Comments.</p>
+          ) : (
+            <div className="space-y-3">
+              {byPanelist.map((g) => (
+                <div key={g.assignment.id}>
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {g.name} {g.assignment.panel_role === "chair" && <span className="normal-case">(Chair)</span>}
+                  </p>
+                  <ul className="space-y-1.5">
+                    {g.comments.map((c) => {
+                      const done = consolidated.has(c.id);
+                      return (
+                        <li key={c.id} className="flex items-start justify-between gap-2 rounded-md border bg-background/40 p-2 text-sm">
+                          <div className="min-w-0">
+                            <div className="mb-0.5 flex flex-wrap gap-1">
+                              <Badge variant={c.severity === "mandatory" ? "warning" : "muted"}>{SEVERITY_LABEL[c.severity]}</Badge>
+                              <Badge variant="outline">{CATEGORY_LABEL[c.category]}</Badge>
+                            </div>
+                            <p className="whitespace-pre-wrap">{c.comment_text}</p>
+                          </div>
+                          {done ? (
+                            <span className="flex shrink-0 items-center gap-1 text-xs text-success"><Check className="size-3.5" /> In minutes</span>
+                          ) : editable ? (
+                            <Button size="sm" variant="outline" className="shrink-0" onClick={() => consolidate([{ c, facultyId: g.assignment.faculty_id }])}>
+                              <Plus /> Add to minutes
+                            </Button>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section>
         <h4 className="mb-2 text-sm font-semibold">Live Q&A Log</h4>
