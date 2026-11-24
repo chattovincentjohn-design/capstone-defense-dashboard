@@ -25,9 +25,15 @@ export async function fetchSessionBundle(sb: SupabaseClient, sessionId: string):
     sb.rpc("panel_scoring_status", { p_session: sessionId }),          // who has scored, not what
   ]);
 
+  // Manuscripts uploaded by groups are private: hand the page a short-lived link.
+  const proj = project.data as CapstoneProject;
+  if (proj?.manuscript_url?.startsWith("storage:")) {
+    proj.manuscript_url = await manuscriptLink(sb, proj.manuscript_url).catch(() => null);
+  }
+
   return {
     session,
-    project: project.data as CapstoneProject,
+    project: proj,
     members: (members.data ?? []) as ProjectMember[],
     assignments: (assignments.data ?? []) as PanelAssignment[],
     criteria: (criteria.data ?? [])
@@ -431,5 +437,56 @@ export async function getGroupSignupSettings(sb: SupabaseClient): Promise<import
 export async function saveGroupSignupSettings(sb: SupabaseClient, s: import("../types").AccessSettings) {
   const { error } = await sb.from("registration_settings")
     .update({ group_signup_open: s.is_open, group_signup_code: s.access_code.trim(), updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) throw error;
+}
+
+// ---------------------------------------------------------------------------
+// Defense requests + manuscript storage (see migrations/*_defense_requests.sql)
+// ---------------------------------------------------------------------------
+type DReq = import("../types").DefenseRequest;
+
+/** Signed link (2 h) for "storage:<path>" or a bare storage path; plain URLs pass through. */
+export async function manuscriptLink(sb: SupabaseClient, pathOrUrl: string): Promise<string> {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  const path = pathOrUrl.replace(/^storage:/, "");
+  const { data, error } = await sb.storage.from("manuscripts").createSignedUrl(path, 60 * 60 * 2);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function uploadManuscript(sb: SupabaseClient, projectId: string, file: File): Promise<string> {
+  const safe = file.name.replace(/\.pdf$/i, "").replace(/[^A-Za-z0-9._-]+/g, "-").slice(0, 60) || "manuscript";
+  const path = `${projectId}/${Date.now()}-${safe}.pdf`;
+  const { error } = await sb.storage.from("manuscripts").upload(path, file, { contentType: "application/pdf", upsert: false });
+  if (error) throw error;
+  return path;
+}
+
+export async function submitDefenseRequest(sb: SupabaseClient, r: import("../types").DefenseRequestInput) {
+  const { error } = await sb.rpc("submit_defense_request", {
+    p_project: r.project_id, p_stage: r.stage, p_preferred_at: r.preferred_at, p_chair: r.chair_id, p_members: r.member_ids,
+    p_manuscript_path: r.manuscript_path, p_abstract: r.abstract, p_note: r.note,
+  });
+  if (error) throw error;
+}
+
+export async function listDefenseRequests(sb: SupabaseClient): Promise<DReq[]> {
+  const { data, error } = await sb.from("defense_requests").select("*").order("created_at", { ascending: false });
+  if (error) throw error;
+  return data as DReq[];
+}
+
+export async function cancelDefenseRequest(sb: SupabaseClient, id: string) {
+  const { error } = await sb.rpc("cancel_defense_request", { p_request: id });
+  if (error) throw error;
+}
+
+export async function rejectDefenseRequest(sb: SupabaseClient, id: string) {
+  const { error } = await sb.from("defense_requests").update({ status: "rejected" }).eq("id", id);
+  if (error) throw error;
+}
+
+export async function completeDefenseRequest(sb: SupabaseClient, id: string) {
+  const { error } = await sb.rpc("complete_defense_request", { p_request: id });
   if (error) throw error;
 }

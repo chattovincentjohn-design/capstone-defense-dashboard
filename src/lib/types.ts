@@ -284,3 +284,27 @@ export interface GroupSignupMatch {
   group_label: string;
   title: string;
 }
+
+// ---------------------------------------------------------------------------
+// Defense requests (a group's account asks for a defense)
+// ---------------------------------------------------------------------------
+export type DefenseRequestStatus = "pending" | "scheduled" | "rejected" | "cancelled";
+
+export interface DefenseRequestInput {
+  project_id: string;
+  stage: DefenseStage;
+  preferred_at: string | null;   // ISO
+  chair_id: string;
+  member_ids: string[];
+  /** Storage path of the uploaded manuscript PDF ("" until uploaded). */
+  manuscript_path: string;
+  abstract: string;
+  note: string;
+}
+
+export interface DefenseRequest extends DefenseRequestInput {
+  id: string;
+  requested_by: string | null;
+  status: DefenseRequestStatus;
+  created_at: string;
+}

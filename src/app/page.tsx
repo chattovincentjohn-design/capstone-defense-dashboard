@@ -1,7 +1,7 @@
 "use client";
 import { BrandLogo } from "@/components/app/brand";
 import Link from "next/link";
-import { CalendarClock, RotateCcw, Settings2 } from "lucide-react";
+import { CalendarClock, RotateCcw, Send, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,6 +39,18 @@ export default function Home() {
           <RoleSwitcher />
         </div>
       </header>
+
+      {currentUser.role === "student" && sessions.some((b) => b.members.some((m) => m.user_id === currentUser.id)) && (
+        <Card>
+          <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+            <div>
+              <p className="font-semibold">Ready for your next defense?</p>
+              <p className="text-sm text-muted-foreground">Propose your panel, upload the manuscript (PDF) and the abstract. The Coordinator confirms and schedules it.</p>
+            </div>
+            <Button asChild><Link href="/request-defense"><Send /> Request a defense</Link></Button>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>

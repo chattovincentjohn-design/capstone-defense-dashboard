@@ -1,14 +1,14 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { CalendarPlus, Download, ExternalLink, Lock, Pencil, Trash2 } from "lucide-react";
+import { CalendarPlus, Download, ExternalLink, FileText, Lock, Pencil, Trash2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { gradesCsv, sessionHasScores, type ScheduleDraft } from "@/lib/admin";
 import { useStore } from "@/lib/store";
-import { STAGE_LABEL, VERDICT_LABEL, type GroupRegistration, type SessionBundle } from "@/lib/types";
-import { TIME_ZONE } from "@/lib/utils";
+import { STAGE_LABEL, VERDICT_LABEL, type DefenseRequest, type GroupRegistration, type SessionBundle } from "@/lib/types";
+import { fmtDateTime, TIME_ZONE } from "@/lib/utils";
 import { ScheduleForm } from "./schedule-form";
 
 const dayKey = (iso: string) => new Date(iso).toLocaleDateString("en-PH", { weekday: "long", year: "numeric", month: "long", day: "numeric", timeZone: TIME_ZONE });
@@ -25,6 +25,14 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
   const [confirmDelete, setConfirmDelete] = React.useState<string | null>(null);
   const [notice, setNotice] = React.useState<string | null>(null);
   const formRef = React.useRef<HTMLDivElement>(null);
+  const [requests, setRequests] = React.useState<DefenseRequest[]>([]);
+  const [fromRequest, setFromRequest] = React.useState<DefenseRequest | null>(null);
+  const [confirmReject, setConfirmReject] = React.useState<string | null>(null);
+  const loadRequests = React.useCallback(async () => {
+    try { setRequests(await ops.listDefenseRequests()); } catch { /* shown elsewhere */ }
+  }, [ops]);
+  React.useEffect(() => { void loadRequests(); }, [loadRequests, state]);
+  const pendingRequests = requests.filter((r) => r.status === "pending");
 
   const sessions = state.order.map((id) => state.bundles[id]).filter(Boolean);
   const byDay = new Map<string, SessionBundle[]>();
@@ -65,6 +73,17 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
   const submit = (d: ScheduleDraft) => run(async () => {
     if (d.sessionId) return ops.updateSchedule(d);
     const msg = await ops.schedule(d);
+    if (fromRequest) {
+      const r = fromRequest;
+      setFromRequest(null);
+      try {
+        await ops.completeDefenseRequest(r.id);
+        await loadRequests();
+        return `${msg} The group's request is marked Scheduled, and its uploaded manuscript and abstract are now on the project.`;
+      } catch (e) {
+        return `${msg} (Could not mark the request scheduled: ${e instanceof Error ? e.message : String(e)})`;
+      }
+    }
     if (prefill && d.projectId === "new") {
       await ops.setRegistrationStatus(prefill.id, "scheduled");
       onPrefillDone?.();
@@ -95,8 +114,54 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
 
   const editing = mode.kind === "edit" ? state.bundles[mode.id] : undefined;
 
+  const projectOf = (id: string) => Object.values(state.bundles).find((b) => b.project.id === id)?.project;
+  const openRequest = (r: DefenseRequest) => {
+    setFromRequest(r);
+    onPrefillDone?.();
+    open({ kind: "new" });
+  };
+
   return (
     <div className="space-y-4">
+      {pendingRequests.length > 0 && (
+        <Card className="border-primary/50">
+          <CardHeader><CardTitle>Defense requests ({pendingRequests.length})</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {pendingRequests.map((r) => {
+              const p = projectOf(r.project_id);
+              return (
+                <div key={r.id} className="space-y-2 rounded-md border bg-background/40 p-3 text-sm">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p><b>{p?.group_label ?? "Group"}</b>: {p?.title} <Badge variant="outline" className="ml-1">{STAGE_LABEL[r.stage]}</Badge></p>
+                    <span className="text-xs text-muted-foreground">Sent {fmtDateTime(r.created_at)}</span>
+                  </div>
+                  <p className="text-xs">
+                    <span className="text-muted-foreground">Preferred:</span> {r.preferred_at ? fmtDateTime(r.preferred_at) : "any time"} ·{" "}
+                    <span className="text-muted-foreground">Proposed Chair:</span> {name(r.chair_id)} ·{" "}
+                    <span className="text-muted-foreground">Members:</span> {r.member_ids.map(name).join(", ")}
+                  </p>
+                  <p className="line-clamp-3 text-xs text-muted-foreground"><b className="text-foreground">Abstract.</b> {r.abstract}</p>
+                  {r.note && <p className="text-xs"><span className="text-muted-foreground">Note:</span> {r.note}</p>}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button size="sm" variant="outline" onClick={() => void ops.manuscriptLink(`storage:${r.manuscript_path}`)
+                      .then((u) => window.open(u, "_blank", "noopener"))}><FileText /> Open manuscript</Button>
+                    <Button size="sm" onClick={() => openRequest(r)}><CalendarPlus /> Schedule defense</Button>
+                    {confirmReject === r.id ? (
+                      <>
+                        <Button size="sm" variant="destructive" onClick={() => void ops.rejectDefenseRequest(r.id)
+                          .then(() => { setConfirmReject(null); setNotice(`${p?.group_label ?? "The group"}'s request was not approved.`); return loadRequests(); })}>Reject</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setConfirmReject(null)}>Keep</Button>
+                      </>
+                    ) : (
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmReject(r.id)}><X /> Reject</Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
           {sessions.length} defenses · {sessions.filter((b) => !b.session.is_locked).length} open · {locked.length} locked
@@ -202,9 +267,10 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
                   Scoring has started. You can reschedule or add panelists, but the stage and the seats of panelists who already scored are locked.
                 </p>
               )}
-              <ScheduleForm key={mode.kind === "edit" ? mode.id : `new-${prefill?.id ?? ""}`} state={state} users={users} editing={editing} busy={busy}
-                prefill={mode.kind === "new" ? prefill ?? undefined : undefined}
-                onSubmit={submit} onCancel={() => { setMode({ kind: "closed" }); onPrefillDone?.(); }} />
+              <ScheduleForm key={mode.kind === "edit" ? mode.id : `new-${prefill?.id ?? ""}-${fromRequest?.id ?? ""}`} state={state} users={users} editing={editing} busy={busy}
+                prefill={mode.kind === "new" && !fromRequest ? prefill ?? undefined : undefined}
+                request={mode.kind === "new" ? fromRequest ?? undefined : undefined}
+                onSubmit={submit} onCancel={() => { setMode({ kind: "closed" }); setFromRequest(null); onPrefillDone?.(); }} />
             </CardContent>
           </Card>
         )}

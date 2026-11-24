@@ -1,8 +1,21 @@
+"use client";
+import * as React from "react";
 import { ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useStore } from "@/lib/store";
 import type { CapstoneProject } from "@/lib/types";
 
-export function ArtifactsPane({ project }: { project: CapstoneProject }) {
+export function ArtifactsPane({ project: raw }: { project: CapstoneProject }) {
+  const { ops } = useStore();
+  // Uploaded manuscripts are stored privately; turn "storage:…" into a viewable link.
+  const [link, setLink] = React.useState<string | null>(raw.manuscript_url?.startsWith("storage:") ? null : raw.manuscript_url);
+  React.useEffect(() => {
+    if (!raw.manuscript_url?.startsWith("storage:")) { setLink(raw.manuscript_url); return; }
+    let live = true;
+    ops.manuscriptLink(raw.manuscript_url).then((u) => live && setLink(u)).catch(() => live && setLink(null));
+    return () => { live = false; };
+  }, [ops, raw.manuscript_url]);
+  const project = { ...raw, manuscript_url: link };
   return (
     <div className="flex h-full flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-2">

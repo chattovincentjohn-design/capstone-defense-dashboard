@@ -9,6 +9,7 @@ const ROLE_ROUTES: { prefix: string; roles: string[] }[] = [
   { prefix: "/admin", roles: ["superadmin", "admin"] },
   { prefix: "/defense", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"] },
   { prefix: "/account", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser", "student"] },
+  { prefix: "/request-defense", roles: ["student"] },
   { prefix: "/print", roles: ["superadmin", "admin", "chair", "panelist", "secretary", "adviser"] },
 ];
 

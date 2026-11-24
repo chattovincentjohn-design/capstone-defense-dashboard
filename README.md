@@ -35,6 +35,16 @@ creates the account with that password. The **Group Accounts** tab lists one row
 password, disable, delete / switch member). The database allows at most one linked account per group, and
 the group account sees every member's grades once the defense is locked.
 
+## Defense requests (`/request-defense`)
+
+A group's account requests its next defense: stage, preferred date, proposed Chair and at least two panel
+members (adviser excluded), plus the **required** manuscript PDF (uploaded to the private `manuscripts`
+storage bucket, ≤ 25 MB) and abstract (≥ 50 characters). The submit button stays locked until every item
+is met, and `submit_defense_request` re-checks all of it. Pending requests appear at the top of
+**Defense Schedule**; **Schedule defense** pre-fills the form (the Coordinator confirms or changes the
+panel), and `complete_defense_request` then makes the uploaded manuscript and abstract the project's.
+Manuscripts are served through short-lived signed links to people who can view the project.
+
 ## Group account sign-up (`/group-signup`)
 
 For groups already in CDEMS without an account (e.g. scheduled by hand): one member enters the group

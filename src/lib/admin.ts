@@ -9,7 +9,7 @@ import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
   Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
-  FacultySignupInput, RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
+  DefenseRequestInput, FacultySignupInput, RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
 import { uid } from "./utils";
@@ -645,3 +645,31 @@ export function accountDeleteProblem(accountId: string, bundles: SessionBundle[]
 
 /** The member who holds the group's single sign-in account, if any. */
 export const groupAccountHolder = (members: ProjectMember[]) => members.find((m) => !!m.user_id) ?? null;
+
+// ---------------------------------------------------------------------------
+// Defense requests
+// ---------------------------------------------------------------------------
+export const MIN_ABSTRACT = 50;
+export const MAX_MANUSCRIPT_MB = 25;
+
+/** Checklist shown to the group; the request can be submitted only when every item is met. Mirrors submit_defense_request(). */
+export function defenseRequestChecklist(r: DefenseRequestInput, adviserId: string | null) {
+  const panel = [r.chair_id, ...r.member_ids].filter(Boolean);
+  return [
+    { label: "Manuscript (PDF) uploaded", ok: !!r.manuscript_path },
+    { label: `Abstract written (at least ${MIN_ABSTRACT} characters)`, ok: r.abstract.trim().length >= MIN_ABSTRACT && r.abstract.length <= 5000 },
+    { label: "Defense Chair chosen", ok: !!r.chair_id },
+    { label: "At least two panel members chosen", ok: r.member_ids.length >= 2 && !r.member_ids.includes(r.chair_id) },
+    { label: "Adviser not on the panel", ok: !adviserId || !panel.includes(adviserId) },
+  ];
+}
+export const defenseRequestReady = (r: DefenseRequestInput, adviserId: string | null) =>
+  defenseRequestChecklist(r, adviserId).every((c) => c.ok);
+
+/** Is this file acceptable as a manuscript? Returns a problem or null. */
+export function manuscriptFileProblem(file: { name: string; type: string; size: number }): string | null {
+  if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) return "The manuscript must be a PDF file.";
+  if (file.size > MAX_MANUSCRIPT_MB * 1024 * 1024) return `The PDF is larger than ${MAX_MANUSCRIPT_MB} MB. Compress it and try again.`;
+  if (file.size === 0) return "The PDF file is empty.";
+  return null;
+}

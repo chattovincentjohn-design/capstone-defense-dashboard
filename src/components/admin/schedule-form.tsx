@@ -11,7 +11,7 @@ import {
   ADVISER_ROLES, assignmentHasScores, FACULTY_ROLES, fromManilaInput, membersToText, sessionHasScores, listProjects, parseMembers, toManilaInput, validateSchedule, type ScheduleDraft,
 } from "@/lib/admin";
 import type { State } from "@/lib/store";
-import { ROLE_LABEL, STAGE_LABEL, type DefenseStage, type GroupRegistration, type SessionBundle, type User } from "@/lib/types";
+import { ROLE_LABEL, STAGE_LABEL, type DefenseRequest, type DefenseStage, type GroupRegistration, type SessionBundle, type User } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 interface FormState {
@@ -32,7 +32,17 @@ interface FormState {
   memberIds: string[];
 }
 
-function initialForm(editing: SessionBundle | undefined, projects: ReturnType<typeof listProjects>, prefill?: GroupRegistration): FormState {
+function initialForm(
+  editing: SessionBundle | undefined, projects: ReturnType<typeof listProjects>, prefill?: GroupRegistration, request?: DefenseRequest,
+): FormState {
+  if (request) {
+    return {
+      projectId: request.project_id, title: "", groupLabel: "", adviserId: "", academicYear: "2026-2027",
+      membersText: "", manuscriptUrl: "", demoUrl: "", abstract: "",
+      stage: request.stage, when: request.preferred_at ? toManilaInput(request.preferred_at) : "", room: "", secretaryId: "",
+      chairId: request.chair_id ?? "", memberIds: request.member_ids,
+    };
+  }
   if (editing) {
     return {
       projectId: editing.project.id, title: "", groupLabel: "", adviserId: "", academicYear: editing.project.academic_year,
@@ -58,18 +68,20 @@ function initialForm(editing: SessionBundle | undefined, projects: ReturnType<ty
   };
 }
 
-export function ScheduleForm({ state, users, editing, prefill, busy = false, onSubmit, onCancel }: {
+export function ScheduleForm({ state, users, editing, prefill, request, busy = false, onSubmit, onCancel }: {
   state: State;
   users: User[];
   editing?: SessionBundle;
   /** A group's self-registration to fill in the new-project fields from. */
   prefill?: GroupRegistration;
+  /** A group's defense request: fills in the group, stage, preferred date and proposed panel. */
+  request?: DefenseRequest;
   busy?: boolean;
   onSubmit: (d: ScheduleDraft) => Promise<string | null>; // resolves to an error message or null
   onCancel: () => void;
 }) {
   const projects = React.useMemo(() => listProjects(state), [state]);
-  const [f, setF] = React.useState<FormState>(() => initialForm(editing, projects, prefill));
+  const [f, setF] = React.useState<FormState>(() => initialForm(editing, projects, prefill, request));
   const [attempted, setAttempted] = React.useState(false);
   const [submitError, setSubmitError] = React.useState<string | null>(null);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -131,6 +143,12 @@ export function ScheduleForm({ state, users, editing, prefill, busy = false, onS
           )}
         </div>
 
+        {request && (
+          <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
+            Filled in from the group&apos;s defense request: stage, preferred date and proposed panel. Change anything you need, then set the room.
+            The manuscript and abstract they uploaded become the project&apos;s when you schedule.
+          </p>
+        )}
         {prefill && f.projectId === "new" && (
           <p className="rounded-md border border-primary/40 bg-primary/10 px-3 py-2 text-xs">
             Filled in from <strong>{prefill.group_label}</strong>&apos;s registration. Check the details, then set the schedule and panel below.

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountDeleteProblem, accountProblems, emailChangeProblem, joinAuthors, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountDeleteProblem, defenseRequestChecklist, defenseRequestReady, manuscriptFileProblem, accountProblems, emailChangeProblem, joinAuthors, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -21,6 +21,7 @@ function state(): State {
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
     facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
     groupSignupSettings: { is_open: true, access_code: "GRP-2026" },
+    defenseRequests: [],
     currentUserId: "u-admin",
     hydrated: true,
   };
@@ -410,5 +411,31 @@ describe("deleting an account", () => {
   });
   it("allows people with no records", () => {
     expect(accountDeleteProblem("someone-new", bundles)).toBeNull();
+  });
+});
+
+describe("defense requests", () => {
+  const base = {
+    project_id: "p", stage: "final" as const, preferred_at: null, chair_id: "c", member_ids: ["m1", "m2"],
+    manuscript_path: "p/ms.pdf", abstract: "x".repeat(60), note: "",
+  };
+  it("is ready only when the PDF, abstract and panel are all there", () => {
+    expect(defenseRequestReady(base, "adv")).toBe(true);
+    expect(defenseRequestReady({ ...base, manuscript_path: "" }, "adv")).toBe(false);
+    expect(defenseRequestReady({ ...base, abstract: "too short" }, "adv")).toBe(false);
+    expect(defenseRequestReady({ ...base, chair_id: "" }, "adv")).toBe(false);
+    expect(defenseRequestReady({ ...base, member_ids: ["m1"] }, "adv")).toBe(false);
+    expect(defenseRequestReady({ ...base, member_ids: ["m1", "adv"] }, "adv")).toBe(false);
+  });
+  it("lists what is missing", () => {
+    const missing = defenseRequestChecklist({ ...base, manuscript_path: "", abstract: "" }, null).filter((c) => !c.ok).map((c) => c.label);
+    expect(missing.join(" ")).toMatch(/Manuscript/);
+    expect(missing.join(" ")).toMatch(/Abstract/);
+  });
+  it("accepts only reasonable PDFs", () => {
+    expect(manuscriptFileProblem({ name: "ms.pdf", type: "application/pdf", size: 1000 })).toBeNull();
+    expect(manuscriptFileProblem({ name: "ms.docx", type: "application/msword", size: 1000 })).toMatch(/PDF/);
+    expect(manuscriptFileProblem({ name: "big.pdf", type: "application/pdf", size: 30 * 1024 * 1024 })).toMatch(/larger/);
+    expect(manuscriptFileProblem({ name: "e.pdf", type: "application/pdf", size: 0 })).toMatch(/empty/);
   });
 });

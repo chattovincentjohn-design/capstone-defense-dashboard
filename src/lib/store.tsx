@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, MIN_PASSWORD, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, MIN_PASSWORD, defenseRequestChecklist, isAdminRole, manuscriptFileProblem, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseRequest, DefenseRequestInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
@@ -36,6 +36,8 @@ export interface State {
   registrationSettings: RegistrationSettings;
   facultySignupSettings: AccessSettings;
   groupSignupSettings: AccessSettings;
+  /** Demo only: defense requests (live mode loads these on demand). */
+  defenseRequests: DefenseRequest[];
   currentUserId: string;
   hydrated: boolean;
 }
@@ -104,6 +106,16 @@ export interface StoreOps {
   groupSignup(code: string, input: GroupSignupInput): Promise<void>;
   getGroupSignupSettings(): Promise<AccessSettings>;
   saveGroupSignupSettings(settings: AccessSettings): Promise<void>;
+  /** Group account: upload the manuscript PDF; returns its storage path. */
+  uploadManuscript(projectId: string, file: File): Promise<string>;
+  /** A viewable link for a stored manuscript path (or a plain URL). */
+  manuscriptLink(pathOrUrl: string): Promise<string>;
+  submitDefenseRequest(input: DefenseRequestInput): Promise<void>;
+  listDefenseRequests(): Promise<DefenseRequest[]>;
+  cancelDefenseRequest(id: string): Promise<void>;
+  rejectDefenseRequest(id: string): Promise<void>;
+  /** After scheduling: marks the request done and makes its manuscript and abstract the project's. */
+  completeDefenseRequest(id: string): Promise<void>;
 }
 
 export interface StoreCtx {
@@ -162,6 +174,7 @@ function initial(): State {
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
     facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
     groupSignupSettings: { is_open: true, access_code: "GRP-2026" },
+    defenseRequests: [],
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -197,6 +210,9 @@ async function backfillSignatures(s: State): Promise<State> {
   }
   return { ...s, bundles };
 }
+
+/** Demo: uploaded manuscripts live only in this browser tab. */
+const demoFiles = new Map<string, string>();
 
 /** Demo mirror of private.group_signup_member(): finds the caller's group or explains why not. */
 function demoGroupSignupMember(s: State, code: string, email: string, studentNumber: string) {
@@ -243,6 +259,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
         accounts: state.accounts, registrations: state.registrations, registrationSettings: state.registrationSettings,
         facultySignupSettings: state.facultySignupSettings, groupSignupSettings: state.groupSignupSettings,
+        defenseRequests: state.defenseRequests,
         currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
@@ -590,6 +607,52 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
           ...mapMembers(s, bundle.project.id, (ms) => ms.map((x) => (x.id === member.id ? { ...x, user_id: account.id } : x))),
           accounts: [...s.accounts, account], currentUserId: account.id,
         });
+      },
+      // ---- Defense requests (mirrors submit_defense_request() etc.) ------------
+      async uploadManuscript(projectId, file) {
+        const problem = manuscriptFileProblem(file);
+        if (problem) throw new Error(problem);
+        // Demo: keep the file in this browser tab only
+        demoFiles.set(`${projectId}/${file.name}`, URL.createObjectURL(file));
+        return `${projectId}/${file.name}`;
+      },
+      async manuscriptLink(pathOrUrl) {
+        const p = pathOrUrl.replace(/^storage:/, "");
+        return demoFiles.get(p) ?? pathOrUrl;
+      },
+      async submitDefenseRequest(input) {
+        const s = stateRef.current;
+        const b = Object.values(s.bundles).find((x) => x.project.id === input.project_id);
+        if (!b || !b.members.some((m) => m.user_id === s.currentUserId)) throw new Error("Only your group's account can request its defense.");
+        if (s.defenseRequests.some((r) => r.project_id === input.project_id && r.status === "pending")) {
+          throw new Error("Your group already has a pending request. Wait for the Coordinator, or cancel it first.");
+        }
+        const missing = defenseRequestChecklist(input, b.project.adviser_id).filter((c) => !c.ok);
+        if (missing.length) throw new Error(`Not ready: ${missing.map((c) => c.label).join("; ")}.`);
+        const req: DefenseRequest = { ...input, abstract: input.abstract.trim(), id: uid("req"), requested_by: s.currentUserId, status: "pending", created_at: new Date().toISOString() };
+        replaceAll({ ...s, defenseRequests: [req, ...s.defenseRequests] });
+      },
+      async listDefenseRequests() {
+        const s = stateRef.current;
+        const me = s.accounts.find((a) => a.id === s.currentUserId);
+        const mine = (r: DefenseRequest) => Object.values(s.bundles).some((b) => b.project.id === r.project_id && b.members.some((m) => m.user_id === s.currentUserId));
+        return s.defenseRequests.filter((r) => (me && isAdminRole(me.role)) || mine(r));
+      },
+      async cancelDefenseRequest(id) {
+        const s = stateRef.current;
+        replaceAll({ ...s, defenseRequests: s.defenseRequests.map((r) => (r.id === id && r.status === "pending" ? { ...r, status: "cancelled" } : r)) });
+      },
+      async rejectDefenseRequest(id) {
+        const s = stateRef.current;
+        replaceAll({ ...s, defenseRequests: s.defenseRequests.map((r) => (r.id === id ? { ...r, status: "rejected" } : r)) });
+      },
+      async completeDefenseRequest(id) {
+        const s = stateRef.current;
+        const r = s.defenseRequests.find((x) => x.id === id);
+        if (!r) throw new Error("Request not found.");
+        const bundles = Object.fromEntries(Object.entries(s.bundles).map(([k, b]) =>
+          [k, b.project.id === r.project_id ? { ...b, project: { ...b.project, manuscript_url: `storage:${r.manuscript_path}`, abstract: r.abstract } } : b]));
+        replaceAll({ ...s, bundles, defenseRequests: s.defenseRequests.map((x) => (x.id === id ? { ...x, status: "scheduled" } : x)) });
       },
       async getGroupSignupSettings() {
         return stateRef.current.groupSignupSettings;

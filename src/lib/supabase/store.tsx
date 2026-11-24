@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, cleanRegistration, facultySignupProblems, groupScoringStarted, registrationProblems, isRubricSyncable, memberProblems, saveStageRubric,
+  activeRubric, blendFor, buildAttendance, cleanRegistration, facultySignupProblems, manuscriptFileProblem, groupScoringStarted, registrationProblems, isRubricSyncable, memberProblems, saveStageRubric,
   sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
@@ -22,7 +22,7 @@ const SCORE_SAVE_MS = 500;
 const MINUTES_SAVE_MS = 800;
 const RELOAD_DEBOUNCE_MS = 250;
 
-const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], registrations: [], registrationSettings: { is_open: false, access_code: "" }, facultySignupSettings: { is_open: false, access_code: "" }, groupSignupSettings: { is_open: false, access_code: "" }, currentUserId: "", hydrated: false };
+const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], registrations: [], registrationSettings: { is_open: false, access_code: "" }, facultySignupSettings: { is_open: false, access_code: "" }, groupSignupSettings: { is_open: false, access_code: "" }, defenseRequests: [], currentUserId: "", hydrated: false };
 const GUEST: User = { id: "", full_name: "Signed out", email: "", role: "student", department: null };
 
 const message = (e: unknown) =>
@@ -99,6 +99,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         registrationSettings: { is_open: false, access_code: "" },
         facultySignupSettings: { is_open: false, access_code: "" },
         groupSignupSettings: { is_open: false, access_code: "" },
+        defenseRequests: [],
         currentUserId: user.id,
         hydrated: true,
       });
@@ -350,6 +351,20 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await repo.groupSignup(sb, code, input);
       const { error } = await sb.auth.signInWithPassword({ email: input.email.trim().toLowerCase(), password: input.password });
       if (error) throw new Error(`Your group account was created, but signing in failed: ${error.message}. Try the sign-in page.`);
+    },
+    async uploadManuscript(projectId, file) {
+      const problem = manuscriptFileProblem(file);
+      if (problem) throw new Error(problem);
+      return repo.uploadManuscript(sb, projectId, file);
+    },
+    manuscriptLink: (pathOrUrl) => repo.manuscriptLink(sb, pathOrUrl),
+    submitDefenseRequest: (input) => repo.submitDefenseRequest(sb, input),
+    listDefenseRequests: () => repo.listDefenseRequests(sb),
+    cancelDefenseRequest: (id) => repo.cancelDefenseRequest(sb, id),
+    rejectDefenseRequest: (id) => repo.rejectDefenseRequest(sb, id),
+    async completeDefenseRequest(id) {
+      await repo.completeDefenseRequest(sb, id);
+      await loadAll();
     },
     getGroupSignupSettings: () => repo.getGroupSignupSettings(sb),
     async saveGroupSignupSettings(settings) {
