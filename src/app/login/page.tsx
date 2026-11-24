@@ -75,6 +75,9 @@ export default function LoginPage() {
               <p className="text-xs text-muted-foreground">
                 Faculty without an account? <Link href="/signup" className="text-primary hover:underline">Create your faculty account</Link>
               </p>
+              <p className="text-xs text-muted-foreground">
+                Group already scheduled but no account? <Link href="/group-signup" className="text-primary hover:underline">Create your group account</Link>
+              </p>
             </form>
           )}
         </CardContent>

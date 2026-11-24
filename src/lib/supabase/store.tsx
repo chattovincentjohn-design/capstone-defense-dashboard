@@ -22,7 +22,7 @@ const SCORE_SAVE_MS = 500;
 const MINUTES_SAVE_MS = 800;
 const RELOAD_DEBOUNCE_MS = 250;
 
-const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], registrations: [], registrationSettings: { is_open: false, access_code: "" }, facultySignupSettings: { is_open: false, access_code: "" }, currentUserId: "", hydrated: false };
+const EMPTY: State = { bundles: {}, order: [], rubric: [], grading: seedGrading(), accounts: [], registrations: [], registrationSettings: { is_open: false, access_code: "" }, facultySignupSettings: { is_open: false, access_code: "" }, groupSignupSettings: { is_open: false, access_code: "" }, currentUserId: "", hydrated: false };
 const GUEST: User = { id: "", full_name: "Signed out", email: "", role: "student", department: null };
 
 const message = (e: unknown) =>
@@ -98,6 +98,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
         registrations: [],
         registrationSettings: { is_open: false, access_code: "" },
         facultySignupSettings: { is_open: false, access_code: "" },
+        groupSignupSettings: { is_open: false, access_code: "" },
         currentUserId: user.id,
         hydrated: true,
       });
@@ -341,6 +342,19 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await repo.facultySignup(sb, code, input);
       const { error } = await sb.auth.signInWithPassword({ email: input.email.trim().toLowerCase(), password: input.password });
       if (error) throw new Error(`Your account was created, but signing in failed: ${error.message}. Try the sign-in page.`);
+    },
+    groupSignupInfo: (code) => repo.groupSignupInfo(sb, code),
+    groupSignupLookup: (code, email, studentNumber) => repo.groupSignupLookup(sb, code, email, studentNumber),
+    async groupSignup(code, input) {
+      if (input.password.length < 8 || input.password.length > 72) throw new Error("Password must be 8 to 72 characters.");
+      await repo.groupSignup(sb, code, input);
+      const { error } = await sb.auth.signInWithPassword({ email: input.email.trim().toLowerCase(), password: input.password });
+      if (error) throw new Error(`Your group account was created, but signing in failed: ${error.message}. Try the sign-in page.`);
+    },
+    getGroupSignupSettings: () => repo.getGroupSignupSettings(sb),
+    async saveGroupSignupSettings(settings) {
+      if (settings.is_open && settings.access_code.trim().length < 4) throw new Error("Set a sign-up code of at least 4 characters before opening sign-up.");
+      await repo.saveGroupSignupSettings(sb, settings);
     },
     getFacultySignupSettings: () => repo.getFacultySignupSettings(sb),
     async saveFacultySignupSettings(settings) {

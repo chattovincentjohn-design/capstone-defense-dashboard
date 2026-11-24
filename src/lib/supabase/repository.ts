@@ -401,3 +401,35 @@ export async function activateGroupAccount(sb: SupabaseClient, registrationId: s
   if (error) throw error;
   return data as import("../types").GroupAccountActivation;
 }
+
+// ---------------------------------------------------------------------------
+// Group account self sign-up (see migrations/*_group_signup.sql)
+// ---------------------------------------------------------------------------
+export async function groupSignupInfo(sb: SupabaseClient, code: string): Promise<{ open: boolean; valid: boolean }> {
+  const { data, error } = await sb.rpc("group_signup_info", { p_code: code });
+  if (error) throw error;
+  return data as { open: boolean; valid: boolean };
+}
+
+export async function groupSignupLookup(sb: SupabaseClient, code: string, email: string, studentNumber: string) {
+  const { data, error } = await sb.rpc("group_signup_lookup", { p_code: code, p_email: email, p_student_number: studentNumber });
+  if (error) throw error;
+  return data as import("../types").GroupSignupMatch;
+}
+
+export async function groupSignup(sb: SupabaseClient, code: string, g: import("../types").GroupSignupInput) {
+  const { error } = await sb.rpc("group_signup", { p_code: code, p_email: g.email, p_student_number: g.student_number, p_password: g.password });
+  if (error) throw error;
+}
+
+export async function getGroupSignupSettings(sb: SupabaseClient): Promise<import("../types").AccessSettings> {
+  const { data, error } = await sb.from("registration_settings").select("group_signup_open, group_signup_code").eq("id", 1).single();
+  if (error) throw error;
+  return { is_open: data.group_signup_open, access_code: data.group_signup_code };
+}
+
+export async function saveGroupSignupSettings(sb: SupabaseClient, s: import("../types").AccessSettings) {
+  const { error } = await sb.from("registration_settings")
+    .update({ group_signup_open: s.is_open, group_signup_code: s.access_code.trim(), updated_at: new Date().toISOString() }).eq("id", 1);
+  if (error) throw error;
+}

@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, MIN_PASSWORD, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
@@ -35,6 +35,7 @@ export interface State {
   registrations: GroupRegistration[];
   registrationSettings: RegistrationSettings;
   facultySignupSettings: AccessSettings;
+  groupSignupSettings: AccessSettings;
   currentUserId: string;
   hydrated: boolean;
 }
@@ -97,6 +98,12 @@ export interface StoreOps {
   facultySignup(code: string, input: FacultySignupInput): Promise<void>;
   getFacultySignupSettings(): Promise<AccessSettings>;
   saveFacultySignupSettings(settings: AccessSettings): Promise<void>;
+  /** Public (signed-out) group account sign-up; signs the new account in. */
+  groupSignupInfo(code: string): Promise<{ open: boolean; valid: boolean }>;
+  groupSignupLookup(code: string, email: string, studentNumber: string): Promise<GroupSignupMatch>;
+  groupSignup(code: string, input: GroupSignupInput): Promise<void>;
+  getGroupSignupSettings(): Promise<AccessSettings>;
+  saveGroupSignupSettings(settings: AccessSettings): Promise<void>;
 }
 
 export interface StoreCtx {
@@ -154,6 +161,7 @@ function initial(): State {
     registrations: [],
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
     facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
+    groupSignupSettings: { is_open: true, access_code: "GRP-2026" },
     currentUserId: "u-ramos",
     hydrated: false,
   };
@@ -190,6 +198,23 @@ async function backfillSignatures(s: State): Promise<State> {
   return { ...s, bundles };
 }
 
+/** Demo mirror of private.group_signup_member(): finds the caller's group or explains why not. */
+function demoGroupSignupMember(s: State, code: string, email: string, studentNumber: string) {
+  const g = s.groupSignupSettings;
+  if (!g.is_open || !g.access_code) throw new Error("Group account sign-up is closed.");
+  if (!codeMatches(code, g.access_code)) throw new Error("The group sign-up code is incorrect.");
+  const e = email.trim().toLowerCase();
+  const n = studentNumber.trim().toLowerCase();
+  for (const bundle of Object.values(s.bundles)) {
+    const member = bundle.members.find((m) => (m.email ?? "").toLowerCase() === e && m.student_number.trim().toLowerCase() === n);
+    if (!member) continue;
+    const holder = groupAccountHolder(bundle.members);
+    if (holder) throw new Error(`Your group already has its account (held by ${holder.student_name}). Use that account, or ask the Coordinator.`);
+    return { bundle, member };
+  }
+  throw new Error("No group member matches that email and student number. Check them with your Coordinator.");
+}
+
 function mapMembers(s: State, projectId: string, fn: (ms: ProjectMember[]) => ProjectMember[]): State {
   const bundles = Object.fromEntries(Object.entries(s.bundles).map(([id, b]) =>
     [id, b.project.id === projectId ? { ...b, members: fn(b.members) } : b]));
@@ -217,7 +242,7 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         bundles: state.bundles, order: state.order, rubric: state.rubric, grading: state.grading,
         accounts: state.accounts, registrations: state.registrations, registrationSettings: state.registrationSettings,
-        facultySignupSettings: state.facultySignupSettings,
+        facultySignupSettings: state.facultySignupSettings, groupSignupSettings: state.groupSignupSettings,
         currentUserId: state.currentUserId,
       }));
     } catch { /* ignore */ }
@@ -540,6 +565,38 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
           is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
         };
         replaceAll({ ...s, accounts: [...s.accounts, account], currentUserId: account.id });
+      },
+      // ---- Group account self sign-up (mirrors the database RPCs) -------------
+      async groupSignupInfo(code) {
+        const g = stateRef.current.groupSignupSettings;
+        const open = g.is_open && !!g.access_code;
+        return { open, valid: open && codeMatches(code, g.access_code) };
+      },
+      async groupSignupLookup(code, email, studentNumber) {
+        const { bundle, member } = demoGroupSignupMember(stateRef.current, code, email, studentNumber);
+        return { student_name: member.student_name, group_label: bundle.project.group_label, title: bundle.project.title };
+      },
+      async groupSignup(code, input) {
+        const s = stateRef.current;
+        const { bundle, member } = demoGroupSignupMember(s, code, input.email, input.student_number);
+        if (input.password.length < MIN_PASSWORD || input.password.length > 72) throw new Error("Password must be 8 to 72 characters.");
+        const email = input.email.trim().toLowerCase();
+        if (s.accounts.some((a) => a.email.toLowerCase() === email)) throw new Error('An account with this email already exists. Sign in instead, or use "Forgot password".');
+        const account: Account = {
+          id: uid("u"), email, full_name: member.student_name, role: "student", department: bundle.project.group_label,
+          is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+        };
+        replaceAll({
+          ...mapMembers(s, bundle.project.id, (ms) => ms.map((x) => (x.id === member.id ? { ...x, user_id: account.id } : x))),
+          accounts: [...s.accounts, account], currentUserId: account.id,
+        });
+      },
+      async getGroupSignupSettings() {
+        return stateRef.current.groupSignupSettings;
+      },
+      async saveGroupSignupSettings(settings) {
+        if (settings.is_open && settings.access_code.trim().length < 4) throw new Error("Set a sign-up code of at least 4 characters before opening sign-up.");
+        replaceAll({ ...stateRef.current, groupSignupSettings: { is_open: settings.is_open, access_code: settings.access_code.trim() } });
       },
       async getFacultySignupSettings() {
         return stateRef.current.facultySignupSettings;

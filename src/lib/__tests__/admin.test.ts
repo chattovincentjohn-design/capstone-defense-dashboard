@@ -20,6 +20,7 @@ function state(): State {
     registrations: [],
     registrationSettings: { is_open: true, access_code: "SCS-2026" },
     facultySignupSettings: { is_open: true, access_code: "FAC-2026" },
+    groupSignupSettings: { is_open: true, access_code: "GRP-2026" },
     currentUserId: "u-admin",
     hydrated: true,
   };

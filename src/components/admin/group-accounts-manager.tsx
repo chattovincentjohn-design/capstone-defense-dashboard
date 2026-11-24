@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import { groupAccountHolder, listProjects } from "@/lib/admin";
 import { useStore } from "@/lib/store";
+import { AccessCodeCard } from "./access-code-card";
 import type { Account } from "@/lib/types";
 import { cn, fmtDateTime } from "@/lib/utils";
 
@@ -58,6 +59,11 @@ export function GroupAccountsManager() {
         locked it sees the verdict, comments, minutes and every member&apos;s grade. Groups that register on the registration page choose
         their authorized member and password themselves; the account is created when you schedule them.
       </p>
+      <AccessCodeCard
+        title="Group account sign-up page"
+        description="For groups that already appear below but have no account yet (for example, scheduled by hand). One member enters this code plus their email and student number as listed in the group, then sets the group password. Groups that already have an account cannot sign up again."
+        path="/group-signup" prefix="GRP" audience="group leaders"
+        load={ops.getGroupSignupSettings} save={ops.saveGroupSignupSettings} />
       <p className="text-sm text-muted-foreground">{projects.length} groups · {withAccount} with an account</p>
 
       {notice && (

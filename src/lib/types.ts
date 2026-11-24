@@ -272,3 +272,15 @@ export interface AccessSettings {
   is_open: boolean;
   access_code: string;
 }
+
+/** Group account self sign-up (public /group-signup page). */
+export interface GroupSignupInput {
+  email: string;
+  student_number: string;
+  password: string;
+}
+export interface GroupSignupMatch {
+  student_name: string;
+  group_label: string;
+  title: string;
+}

@@ -35,6 +35,13 @@ creates the account with that password. The **Group Accounts** tab lists one row
 password, disable, delete / switch member). The database allows at most one linked account per group, and
 the group account sees every member's grades once the defense is locked.
 
+## Group account sign-up (`/group-signup`)
+
+For groups already in CDEMS without an account (e.g. scheduled by hand): one member enters the group
+sign-up code (set in **Group Accounts**, separate from the registration code) plus their email and student
+number exactly as listed in the group, sets the password and is signed in as the group's account.
+Groups that already have an account cannot sign up again (`group_signup` enforces one per group).
+
 ## Faculty sign-up (`/signup`)
 
 Faculty create their own account on the public **/signup** page, choosing Panel Member, Defense Chair,
