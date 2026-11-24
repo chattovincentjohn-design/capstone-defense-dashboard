@@ -263,6 +263,11 @@ export async function updateAccount(
 ) {
   const { error } = await sb.from("users").update(patch).eq("id", id);
   if (error) throw error;
+  // Keep a student's name in their group's member list in step with the account
+  if (patch.full_name) {
+    const { error: e2 } = await sb.from("project_members").update({ student_name: patch.full_name }).eq("user_id", id);
+    if (e2) throw e2;
+  }
 }
 
 export async function resetPassword(sb: SupabaseClient, id: string): Promise<string> {

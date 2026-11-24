@@ -326,7 +326,11 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         if (!canManageAccount(actor, target)) throw new Error("Only the Super Admin can manage Coordinator accounts.");
         const problem = accountChangeProblem(actor, target, { role: patch.role });
         if (problem) throw new Error(problem);
-        replaceAll({ ...s, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
+        const bundles = patch.full_name
+          ? Object.fromEntries(Object.entries(s.bundles).map(([k, b]) =>
+              [k, { ...b, members: b.members.map((m) => (m.user_id === id ? { ...m, student_name: patch.full_name! } : m)) }]))
+          : s.bundles;
+        replaceAll({ ...s, bundles, accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...patch } : a)) });
       },
       async changeEmail(id, email) {
         const s = stateRef.current;

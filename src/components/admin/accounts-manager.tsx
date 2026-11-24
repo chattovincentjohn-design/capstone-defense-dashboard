@@ -19,8 +19,10 @@ const BLANK: AccountInput = { full_name: "", email: "", role: "panelist", depart
 
 type Credential = { kind: "created" | "reset"; name: string; email: string; password: string };
 
-export function AccountsManager() {
-  const { ops, currentUser, mode } = useStore();
+/** Faculty Accounts and Student Accounts share this screen; `audience` decides which accounts it lists. */
+export function AccountsManager({ audience = "faculty" }: { audience?: "faculty" | "students" } = {}) {
+  const students = audience === "students";
+  const { ops, currentUser, mode, state } = useStore();
   const [accounts, setAccounts] = React.useState<Account[] | null>(null);
   const [loadError, setLoadError] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState("");
@@ -60,32 +62,49 @@ export function AccountsManager() {
   if (loadError) return <p role="alert" className="text-sm text-destructive">Could not load accounts: {loadError}</p>;
   if (!accounts) return <p className="text-sm text-muted-foreground">Loading accounts…</p>;
 
+  // Group membership of each student account (from the defenses this admin can see)
+  const membership = new Map<string, { group: string; number: string }>();
+  for (const b of Object.values(state.bundles)) {
+    for (const m of b.members) if (m.user_id) membership.set(m.user_id, { group: b.project.group_label, number: m.student_number });
+  }
+  const listed = accounts.filter((a) => (a.role === "student") === students);
   const q = query.trim().toLowerCase();
-  const shown = accounts.filter((a) =>
-    (roleFilter === "all" || a.role === roleFilter) &&
-    (!q || a.full_name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || (a.department ?? "").toLowerCase().includes(q)));
-  const disabled = accounts.filter((a) => !a.is_active).length;
+  const shown = listed.filter((a) =>
+    (students || roleFilter === "all" || a.role === roleFilter) &&
+    (!q || a.full_name.toLowerCase().includes(q) || a.email.toLowerCase().includes(q) || (a.department ?? "").toLowerCase().includes(q) ||
+      (membership.get(a.id)?.number ?? "").includes(q) || (membership.get(a.id)?.group ?? "").toLowerCase().includes(q)));
+  const disabled = listed.filter((a) => !a.is_active).length;
+  const formRoles = students ? (["student"] as UserRole[]) : assignableRoles(currentUser).filter((r) => r !== "student");
 
   return (
     <div className="space-y-4">
-      <AccessCodeCard
+      {!students && <AccessCodeCard
         title="Faculty sign-up page"
         description="Faculty create their own account here (Panel Member, Defense Chair, Defense Secretary or Adviser) and choose their own password. They need the code below. Coordinator accounts are still created only by the Super Admin."
         path="/signup" prefix="FAC" audience="faculty"
-        load={ops.getFacultySignupSettings} save={ops.saveFacultySignupSettings} />
+        load={ops.getFacultySignupSettings} save={ops.saveFacultySignupSettings} />}
+      {students && (
+        <p className="text-sm text-muted-foreground">
+          Student (proponent) sign-in accounts. Each student sees only their own group&apos;s defense and their own grade.
+          You can also create them per group from the <b>Groups</b> tab; an account here is linked to a group automatically when the email matches.
+        </p>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-muted-foreground">{accounts.length} accounts{disabled ? ` · ${disabled} disabled` : ""}</p>
+        <p className="text-sm text-muted-foreground">{listed.length} {students ? "student" : "faculty"} accounts{disabled ? ` · ${disabled} disabled` : ""}</p>
         <div className="flex flex-wrap items-center gap-2">
           <label className="relative">
             <span className="sr-only">Search accounts</span>
             <Search className="pointer-events-none absolute left-2.5 top-2.5 size-4 text-muted-foreground" aria-hidden />
-            <Input className="h-9 w-56 pl-8" placeholder="Search name, email, dept." value={query} onChange={(e) => setQuery(e.target.value)} />
+            <Input className="h-9 w-56 pl-8" placeholder={students ? "Search name, email, student no., group" : "Search name, email, dept."}
+              value={query} onChange={(e) => setQuery(e.target.value)} />
           </label>
-          <NativeSelect className="h-9 w-44" aria-label="Filter by role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as UserRole | "all")}>
-            <option value="all">All roles</option>
-            {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-          </NativeSelect>
-          <Button size="sm" onClick={() => { setShowForm(true); setCredential(null); setNotice(null); }}><UserPlus /> Add account</Button>
+          {!students && (
+            <NativeSelect className="h-9 w-44" aria-label="Filter by role" value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as UserRole | "all")}>
+              <option value="all">All roles</option>
+              {ROLES.filter((r) => r !== "student").map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+            </NativeSelect>
+          )}
+          <Button size="sm" onClick={() => { setShowForm(true); setCredential(null); setNotice(null); }}><UserPlus /> {students ? "Add student" : "Add account"}</Button>
         </div>
       </div>
 
@@ -98,7 +117,7 @@ export function AccountsManager() {
       )}
 
       {showForm && (
-        <CreateAccountForm existing={accounts} roles={assignableRoles(currentUser)} onCancel={() => setShowForm(false)}
+        <CreateAccountForm existing={accounts} roles={formRoles} students={students} onCancel={() => setShowForm(false)}
           onCreate={async (input) => {
             const { account, tempPassword } = await ops.createAccount(input);
             setShowForm(false);
@@ -113,8 +132,8 @@ export function AccountsManager() {
             <thead className="text-xs text-muted-foreground">
               <tr className="border-b">
                 <th className="px-4 py-2 text-left font-medium">Name</th>
-                <th className="px-2 py-2 text-left font-medium">Role</th>
-                <th className="px-2 py-2 text-left font-medium">Department</th>
+                <th className="px-2 py-2 text-left font-medium">{students ? "Group · Student No." : "Role"}</th>
+                <th className="px-2 py-2 text-left font-medium">{students ? "Section" : "Department"}</th>
                 <th className="px-2 py-2 text-left font-medium">Status</th>
                 <th className="px-2 py-2 text-left font-medium">Last sign-in</th>
                 <th className="px-4 py-2 text-right font-medium">Actions</th>
@@ -129,16 +148,23 @@ export function AccountsManager() {
                 const busy = busyId === a.id;
                 const manageable = canManageAccount(currentUser, a);
                 const lockedHint = !manageable ? "Only the Super Admin can manage Coordinator accounts" : undefined;
-                const roleOptions = ROLES.filter((r) => r === a.role || assignableRoles(currentUser).includes(r));
+                const roleOptions = ROLES.filter((r) => r !== "student" && (r === a.role || assignableRoles(currentUser).includes(r)));
+                const member = membership.get(a.id);
                 return (
                   <tr key={a.id} className={cn("border-b align-middle last:border-0", !a.is_active && "opacity-60")}>
                     <td className="px-4 py-2.5">
-                      <p className="font-medium">{a.full_name} {self && <Badge variant="default" className="ml-1">You</Badge>}</p>
+                      <NameField account={a} disabled={busy || !manageable} self={self}
+                        onSave={(full_name) => act(a.id, () => ops.updateAccount(a.id, { full_name }), `Name updated to ${full_name}.`)} />
                       <EmailField account={a} accounts={accounts ?? []} disabled={busy || !manageable} title={lockedHint}
                         onSave={(email) => act(a.id, () => ops.changeEmail(a.id, email),
                           `${a.full_name} now signs in with ${email.trim().toLowerCase()}. Their password did not change.`)} />
                     </td>
                     <td className="px-2 py-2.5">
+                      {students ? (
+                        member
+                          ? <span className="text-xs">{member.group} · <span className="font-mono">{member.number}</span></span>
+                          : <Badge variant="muted">Not in a group</Badge>
+                      ) : (
                       <NativeSelect className="h-8 w-44 text-xs" aria-label={`Role for ${a.full_name}`} value={a.role}
                         disabled={busy || !manageable || (self && isAdminRole(a.role))}
                         title={self && isAdminRole(a.role) ? "You cannot change your own administrator role" : lockedHint}
@@ -150,10 +176,11 @@ export function AccountsManager() {
                         }}>
                         {roleOptions.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
                       </NativeSelect>
+                      )}
                     </td>
                     <td className="px-2 py-2.5">
                       <DepartmentField account={a} disabled={busy || !manageable}
-                        onSave={(department) => act(a.id, () => ops.updateAccount(a.id, { department: department || null }), `Department updated for ${a.full_name}.`)} />
+                        onSave={(department) => act(a.id, () => ops.updateAccount(a.id, { department: department || null }), `${students ? "Section" : "Department"} updated for ${a.full_name}.`)} />
                     </td>
                     <td className="px-2 py-2.5">
                       <Badge variant={a.is_active ? "success" : "muted"}>{a.is_active ? "Active" : "Disabled"}</Badge>
@@ -249,6 +276,38 @@ function EmailField({ account, accounts, disabled, title, onSave }: {
   );
 }
 
+function NameField({ account, disabled, self, onSave }: {
+  account: Account; disabled: boolean; self: boolean; onSave: (name: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = React.useState(false);
+  const [value, setValue] = React.useState(account.full_name);
+  const trimmed = value.trim();
+  const invalid = trimmed.length < 2;
+  const save = async () => {
+    if (invalid || trimmed === account.full_name) return setEditing(false);
+    await onSave(trimmed);
+    setEditing(false);
+  };
+  if (!editing) {
+    return (
+      <p className="flex items-center gap-1 font-medium">
+        {account.full_name} {self && <Badge variant="default" className="ml-1">You</Badge>}
+        <Button size="icon" variant="ghost" className="size-6" aria-label={`Edit name of ${account.full_name}`} title="Edit name"
+          disabled={disabled} onClick={() => { setValue(account.full_name); setEditing(true); }}><Pencil className="size-3" /></Button>
+      </p>
+    );
+  }
+  return (
+    <div className="flex items-center gap-1">
+      <Input autoFocus className="h-7 w-56 text-sm" aria-label={`New name for ${account.full_name}`} value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => { if (e.key === "Enter") void save(); if (e.key === "Escape") setEditing(false); }} />
+      <Button size="icon" className="size-7" aria-label="Save name" disabled={disabled || invalid} onClick={() => void save()}><Check /></Button>
+      <Button size="icon" variant="ghost" className="size-7" aria-label="Cancel" onClick={() => setEditing(false)}><X /></Button>
+    </div>
+  );
+}
+
 function DepartmentField({ account, disabled, onSave }: { account: Account; disabled: boolean; onSave: (v: string) => void }) {
   const [value, setValue] = React.useState(account.department ?? "");
   React.useEffect(() => setValue(account.department ?? ""), [account.department]);
@@ -260,10 +319,10 @@ function DepartmentField({ account, disabled, onSave }: { account: Account; disa
   );
 }
 
-function CreateAccountForm({ existing, roles, onCreate, onCancel }: {
-  existing: Account[]; roles: UserRole[]; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
+function CreateAccountForm({ existing, roles, students = false, onCreate, onCancel }: {
+  existing: Account[]; roles: UserRole[]; students?: boolean; onCreate: (input: AccountInput) => Promise<void>; onCancel: () => void;
 }) {
-  const [f, setF] = React.useState<AccountInput>(BLANK);
+  const [f, setF] = React.useState<AccountInput>(() => ({ ...BLANK, role: roles.includes(BLANK.role) ? BLANK.role : roles[0] }));
   const [attempted, setAttempted] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [serverError, setServerError] = React.useState<string | null>(null);
@@ -287,27 +346,32 @@ function CreateAccountForm({ existing, roles, onCreate, onCancel }: {
 
   return (
     <Card>
-      <CardHeader><CardTitle>New account</CardTitle></CardHeader>
+      <CardHeader><CardTitle>{students ? "New student account" : "New account"}</CardTitle></CardHeader>
       <CardContent>
         <form onSubmit={submit} noValidate className="space-y-4">
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="acc-name">Full name (as it appears on documents)</Label>
-              <Input id="acc-name" value={f.full_name} onChange={(e) => set("full_name", e.target.value)} placeholder="Prof. Juan P. Santos" autoComplete="off" />
+              <Input id="acc-name" value={f.full_name} onChange={(e) => set("full_name", e.target.value)}
+                placeholder={students ? "Ana M. Cruz" : "Prof. Juan P. Santos"} autoComplete="off" />
             </div>
             <div className="space-y-1">
               <Label htmlFor="acc-email">Email (used to sign in)</Label>
-              <Input id="acc-email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)} placeholder="jsantos@school.edu" autoComplete="off" />
+              <Input id="acc-email" type="email" value={f.email} onChange={(e) => set("email", e.target.value)}
+                placeholder={students ? "acruz@jhcsc.edu.ph" : "jsantos@school.edu"} autoComplete="off" />
             </div>
+            {!students && (
+              <div className="space-y-1">
+                <Label htmlFor="acc-role">Role</Label>
+                <NativeSelect id="acc-role" value={f.role} onChange={(e) => set("role", e.target.value as UserRole)}>
+                  {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                </NativeSelect>
+              </div>
+            )}
             <div className="space-y-1">
-              <Label htmlFor="acc-role">Role</Label>
-              <NativeSelect id="acc-role" value={f.role} onChange={(e) => set("role", e.target.value as UserRole)}>
-                {roles.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
-              </NativeSelect>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="acc-dept">Department / section</Label>
-              <Input id="acc-dept" value={f.department} onChange={(e) => set("department", e.target.value)} placeholder="College of Computing Studies" />
+              <Label htmlFor="acc-dept">{students ? "Section" : "Department / section"}</Label>
+              <Input id="acc-dept" value={f.department} onChange={(e) => set("department", e.target.value)}
+                placeholder={students ? "BSIT 4-A" : "College of Computing Studies"} />
             </div>
           </div>
           {f.role === "admin" && <p className="text-xs text-warning">Coordinators can manage every schedule, rubric and non-Coordinator account.</p>}

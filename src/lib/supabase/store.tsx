@@ -361,6 +361,7 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
     async updateAccount(id, patch) {
       await repo.updateAccount(sb, id, patch);
       setUsers(await repo.listUsers(sb));
+      if (patch.full_name) await loadAll();
     },
     async changeEmail(id, email) {
       await repo.changeEmail(sb, id, email);
