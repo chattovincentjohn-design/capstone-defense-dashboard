@@ -329,7 +329,9 @@ export async function submitRegistration(sb: SupabaseClient, code: string, input
 }
 
 export async function listRegistrations(sb: SupabaseClient): Promise<Reg[]> {
-  const { data, error } = await sb.from("group_registrations").select("*").order("created_at", { ascending: false });
+  const { data, error } = await sb.from("group_registrations")
+    .select("id, group_label, title, academic_year, adviser_id, adviser_name, members, manuscript_url, demo_url, abstract, contact_email, status, created_at, authorized_index")
+    .order("created_at", { ascending: false });
   if (error) throw error;
   return data as Reg[];
 }
@@ -392,4 +394,10 @@ export async function saveFacultySignupSettings(sb: SupabaseClient, s: import(".
 export async function deleteAccount(sb: SupabaseClient, id: string) {
   const { error } = await sb.rpc("admin_delete_account", { p_user: id });
   if (error) throw error;
+}
+
+export async function activateGroupAccount(sb: SupabaseClient, registrationId: string): Promise<import("../types").GroupAccountActivation> {
+  const { data, error } = await sb.rpc("activate_group_account", { p_registration: registrationId });
+  if (error) throw error;
+  return data as import("../types").GroupAccountActivation;
 }

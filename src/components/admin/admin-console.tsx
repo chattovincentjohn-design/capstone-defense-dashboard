@@ -10,14 +10,15 @@ import { RoleSwitcher } from "@/components/defense/role-switcher";
 import { useStore } from "@/lib/store";
 import type { GroupRegistration } from "@/lib/types";
 import { AccountsManager } from "./accounts-manager";
+import { GroupAccountsManager } from "./group-accounts-manager";
 import { GroupsManager } from "./groups-manager";
 import { RegistrationsManager } from "./registrations-manager";
 import { RubricEditor } from "./rubric-editor";
 import { ScheduleManager } from "./schedule-manager";
 
-export type ConsoleTab = "schedule" | "registrations" | "groups" | "rubric" | "accounts" | "students";
+export type ConsoleTab = "schedule" | "registrations" | "groups" | "rubric" | "accounts" | "groupAccounts";
 const TAB_PATH: Record<ConsoleTab, string> = {
-  schedule: "/admin", registrations: "/admin/registrations", groups: "/admin/groups", rubric: "/admin/rubric", accounts: "/admin/accounts", students: "/admin/students",
+  schedule: "/admin", registrations: "/admin/registrations", groups: "/admin/groups", rubric: "/admin/rubric", accounts: "/admin/accounts", groupAccounts: "/admin/group-accounts",
 };
 
 export function AdminConsole({ initialTab = "schedule" }: { initialTab?: ConsoleTab }) {
@@ -38,7 +39,7 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
           <BrandLogo size={40} />
           <div>
             <h1 className="text-base font-bold uppercase tracking-wider sm:text-lg">{currentUser.role === "superadmin" ? "Super Admin Console" : "Coordinator Console"}</h1>
-            <p className="text-xs text-muted-foreground">Defense scheduling · Registrations · Groups · Rubric · Faculty & student accounts</p>
+            <p className="text-xs text-muted-foreground">Defense scheduling · Registrations · Groups · Rubric · Faculty & group accounts</p>
           </div>
         </div>
         <RoleSwitcher />
@@ -66,7 +67,7 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
                 <TabsTrigger value="groups"><GraduationCap /> Groups</TabsTrigger>
                 <TabsTrigger value="rubric"><ListChecks /> Rubric Configuration</TabsTrigger>
                 <TabsTrigger value="accounts"><Users /> Faculty Accounts</TabsTrigger>
-                <TabsTrigger value="students"><UserRound /> Student Accounts</TabsTrigger>
+                <TabsTrigger value="groupAccounts"><UserRound /> Group Accounts</TabsTrigger>
               </TabsList>
             </Card>
             <TabsContent value="schedule">
@@ -78,7 +79,7 @@ export function AdminConsole({ initialTab = "schedule" }: { initialTab?: Console
             <TabsContent value="groups"><GroupsManager /></TabsContent>
             <TabsContent value="rubric"><RubricEditor /></TabsContent>
             <TabsContent value="accounts"><AccountsManager audience="faculty" /></TabsContent>
-            <TabsContent value="students"><AccountsManager audience="students" /></TabsContent>
+            <TabsContent value="groupAccounts"><GroupAccountsManager /></TabsContent>
           </Tabs>
         )}
       </main>

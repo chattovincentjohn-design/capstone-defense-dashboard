@@ -1,7 +1,7 @@
 "use client";
 import * as React from "react";
 import Link from "next/link";
-import { ArrowRight, CheckCircle2, KeyRound, Plus, Send, Trash2, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Eye, EyeOff, KeyRound, Plus, Send, Trash2, XCircle } from "lucide-react";
 import { BrandLogo } from "@/components/app/brand";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,7 @@ const currentAy = () => {
 const blank = (): RegistrationInput => ({
   group_label: "", title: "", academic_year: currentAy(), adviser_id: null, adviser_name: "",
   members: [blankMember(), blankMember(), blankMember()], manuscript_url: "", demo_url: "", abstract: "", contact_email: "",
+  authorized_index: 0, password: "",
 });
 const errorText = (e: unknown) => (e instanceof Error ? e.message : String((e as { message?: unknown })?.message ?? e));
 
@@ -51,8 +52,18 @@ export default function RegisterPage() {
     setF((x) => ({ ...x, members: x.members.map((m, j) => (j === i ? { ...m, [k]: v } : m)) }));
 
   // Ignore rows the group left completely empty.
-  const filled = { ...f, members: f.members.filter((m) => m.student_name.trim() || m.student_number.trim() || m.email.trim()) };
-  const problems = registrationProblems(filled);
+  const [confirmPw, setConfirmPw] = React.useState("");
+  const [showPw, setShowPw] = React.useState(false);
+  // Ignore rows the group left completely empty; the authorized member is picked by row.
+  const rows = f.members.map((m, i) => ({ m, i })).filter(({ m }) => m.student_name.trim() || m.student_number.trim() || m.email.trim());
+  const filled: RegistrationInput = {
+    ...f, members: rows.map((r) => r.m),
+    authorized_index: rows.findIndex((r) => r.i === f.authorized_index),
+  };
+  const problems = [
+    ...registrationProblems(filled),
+    ...(f.password.length >= 8 && f.password !== confirmPw ? ["The two passwords do not match."] : []),
+  ];
 
   const checkCode = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -78,7 +89,8 @@ export default function RegisterPage() {
     setServerError(null);
     try {
       await ops.submitRegistration(code, filled);
-      setDone(filled);
+      setDone({ ...filled, password: "" });
+      setConfirmPw("");
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
       setServerError(errorText(err));
@@ -107,11 +119,13 @@ export default function RegisterPage() {
             <p className="flex items-center gap-2 text-base font-semibold text-success"><CheckCircle2 className="size-5" /> Registration received</p>
             <p><span className="text-muted-foreground">Group:</span> {done.group_label} · {done.title}</p>
             <p><span className="text-muted-foreground">Members:</span> {done.members.map((m) => m.student_name).join(", ")}</p>
+            <p><span className="text-muted-foreground">Group account:</span> {done.members[done.authorized_index]?.student_name} ({done.members[done.authorized_index]?.email})</p>
             <p className="text-muted-foreground">
-              The Capstone Coordinator will review it and schedule your defense. Each member will receive their own CDEMS
-              sign-in details privately. If you made a mistake, contact the Coordinator instead of submitting again.
+              The Capstone Coordinator will review it and schedule your defense. Once scheduled, the group account signs in
+              with that email and the password you chose, and can see the whole group&apos;s defense, grades and revisions.
+              If you made a mistake, contact the Coordinator instead of submitting again.
             </p>
-            <Button variant="outline" onClick={() => { setDone(null); setF(blank()); setAdviserChoice(""); setAttempted(false); }}>
+            <Button variant="outline" onClick={() => { setDone(null); setF(blank()); setAdviserChoice(""); setAttempted(false); setConfirmPw(""); }}>
               Register another group
             </Button>
           </CardContent>
@@ -214,7 +228,7 @@ export default function RegisterPage() {
           <CardHeader><CardTitle>2 · Members</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Each member gets their own CDEMS account to see their grade, so use an email each member can open.
+              List every member exactly as on official documents. One member will sign in for the whole group (next section).
             </p>
             <div className="space-y-2">
               {f.members.map((m, i) => (
@@ -223,7 +237,10 @@ export default function RegisterPage() {
                   <Input aria-label={`Member ${i + 1} student number`} value={m.student_number} onChange={(e) => setMember(i, "student_number", e.target.value)} placeholder="Student No., e.g. 2022-00811" />
                   <Input aria-label={`Member ${i + 1} email`} type="email" value={m.email} onChange={(e) => setMember(i, "email", e.target.value)} placeholder="Email" />
                   <Button type="button" size="icon" variant="ghost" aria-label={`Remove member ${i + 1}`} disabled={f.members.length === 1}
-                    onClick={() => setF((x) => ({ ...x, members: x.members.filter((_, j) => j !== i) }))}><Trash2 /></Button>
+                    onClick={() => setF((x) => ({
+                      ...x, members: x.members.filter((_, j) => j !== i),
+                      authorized_index: x.authorized_index === i ? 0 : x.authorized_index > i ? x.authorized_index - 1 : x.authorized_index,
+                    }))}><Trash2 /></Button>
                 </div>
               ))}
             </div>
@@ -233,10 +250,38 @@ export default function RegisterPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>3 · Group leader</CardTitle></CardHeader>
-          <CardContent className="space-y-1">
-            <Label htmlFor="r-contact">Contact email</Label>
-            <Input id="r-contact" type="email" value={f.contact_email} onChange={(e) => set("contact_email", e.target.value)} placeholder="Where the Coordinator can reach your group" />
+          <CardHeader><CardTitle>3 · Group account</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Each group has <b>one</b> CDEMS account. Choose the authorized member who signs in for the group and set its password.
+              They sign in with their own email (from the list above).
+            </p>
+            <div className="space-y-1">
+              <Label htmlFor="r-auth">Authorized member</Label>
+              <NativeSelect id="r-auth" value={String(f.authorized_index)} onChange={(e) => set("authorized_index", Number(e.target.value))}>
+                {f.members.map((m, i) => (
+                  <option key={i} value={i}>{m.student_name.trim() || `Member ${i + 1}`}{m.email.trim() ? ` — ${m.email.trim()}` : ""}</option>
+                ))}
+              </NativeSelect>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1">
+                <Label htmlFor="r-pw">Password</Label>
+                <div className="relative">
+                  <Input id="r-pw" type={showPw ? "text" : "password"} value={f.password} onChange={(e) => set("password", e.target.value)}
+                    autoComplete="new-password" className="pr-9" />
+                  <button type="button" className="absolute inset-y-0 right-2 flex items-center text-muted-foreground"
+                    aria-label={showPw ? "Hide password" : "Show password"} onClick={() => setShowPw((v) => !v)}>
+                    {showPw ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">At least 8 characters. Keep it within your group.</p>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="r-pw2">Confirm password</Label>
+                <Input id="r-pw2" type={showPw ? "text" : "password"} value={confirmPw} onChange={(e) => setConfirmPw(e.target.value)} autoComplete="new-password" />
+              </div>
+            </div>
           </CardContent>
         </Card>
 

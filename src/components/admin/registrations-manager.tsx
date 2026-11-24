@@ -85,12 +85,17 @@ export function RegistrationsManager({ onSchedule }: { onSchedule: (r: GroupRegi
             <div className="space-y-1">
               <CardTitle className="normal-case tracking-normal">{r.group_label}: {r.title}</CardTitle>
               <p className="text-xs text-muted-foreground">
-                A.Y. {r.academic_year} · Submitted {fmtDateTime(r.created_at)} · Leader: {r.contact_email}
+                A.Y. {r.academic_year} · Submitted {fmtDateTime(r.created_at)}
               </p>
             </div>
             <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
+            <p>
+              <span className="text-muted-foreground">Group account: </span>
+              {r.members[r.authorized_index]?.student_name} <span className="text-xs text-muted-foreground">({r.members[r.authorized_index]?.email})</span>
+              {r.status === "pending" && <span className="ml-1 text-xs text-muted-foreground">· password set by the group; created when you schedule</span>}
+            </p>
             <p>
               <span className="text-muted-foreground">Adviser: </span>
               {adviserName(r) ?? (r.adviser_name

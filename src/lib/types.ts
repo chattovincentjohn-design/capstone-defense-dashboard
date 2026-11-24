@@ -223,10 +223,15 @@ export interface RegistrationInput {
   manuscript_url: string;
   demo_url: string;
   abstract: string;
+  /** Filled in from the authorized member's email. */
   contact_email: string;
+  /** Which member (index into `members`) signs in for the whole group. */
+  authorized_index: number;
+  /** The group account's password; sent once, stored only as a hash. */
+  password: string;
 }
 
-export interface GroupRegistration extends RegistrationInput {
+export interface GroupRegistration extends Omit<RegistrationInput, "password"> {
   id: string;
   status: RegistrationStatus;
   created_at: string;
@@ -242,6 +247,13 @@ export interface RegistrationFormInfo {
   open: boolean;
   valid: boolean;
   advisers: { id: string; full_name: string }[];
+}
+
+/** Outcome of creating a group's account from its registration. */
+export interface GroupAccountActivation {
+  status: "created" | "linked" | "exists" | "no_password" | "not_found";
+  name: string;
+  email: string;
 }
 
 // ---------------------------------------------------------------------------

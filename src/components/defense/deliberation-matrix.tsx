@@ -40,7 +40,7 @@ export function DeliberationMatrix({ bundle, viewer, userById, onFinalize }: {
 }
 
 function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof DeliberationMatrix>[0]) {
-  // Students see only their own row (the database also withholds classmates' scores).
+  // The group's account sees every member (the database applies the same rule).
   const ownOnly = gradeVisibleMembers(viewer, bundle).length < bundle.members.length;
   const c = consolidate({ ...bundle, members: gradeVisibleMembers(viewer, bundle) });
   const [verdict, setVerdict] = React.useState<Verdict>(bundle.session.verdict ?? c.suggestedVerdict);

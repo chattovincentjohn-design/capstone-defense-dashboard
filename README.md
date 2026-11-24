@@ -26,6 +26,15 @@ leaders must enter (signed-out visitors can only call `registration_form_info` a
 button that opens the schedule form already filled in; once scheduled, the students' sign-in accounts are
 created from the **Groups** tab as usual.
 
+## Group accounts (one per group)
+
+Each capstone group has a single sign-in account held by an **authorized member**. On `/register` the
+group leader picks that member and sets the password (stored only as a bcrypt hash, never readable through
+the API). When the Coordinator schedules the defense from the registration, `activate_group_account`
+creates the account with that password. The **Group Accounts** tab lists one row per group (create, reset
+password, disable, delete / switch member). The database allows at most one linked account per group, and
+the group account sees every member's grades once the defense is locked.
+
 ## Faculty sign-up (`/signup`)
 
 Faculty create their own account on the public **/signup** page, choosing Panel Member, Defense Chair,

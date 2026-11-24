@@ -68,7 +68,18 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
     if (prefill && d.projectId === "new") {
       await ops.setRegistrationStatus(prefill.id, "scheduled");
       onPrefillDone?.();
-      return `${msg} ${prefill.group_label}'s registration is marked Scheduled — create the students' sign-in accounts in Groups.`;
+      let account = "";
+      try {
+        const a = await ops.activateGroupAccount(prefill.id);
+        account = a.status === "created"
+          ? ` Group account ready: ${a.name} signs in with ${a.email} and the password the group chose.`
+          : a.status === "linked" ? ` ${a.name}'s existing account (${a.email}) is now the group account.`
+          : a.status === "exists" ? ` The group already has its account (${a.name}).`
+          : ` Create the group account in Group Accounts (${a.status === "no_password" ? "no password was saved" : "authorized member not found"}).`;
+      } catch (e) {
+        account = ` The group account could not be created: ${e instanceof Error ? e.message : String(e)} Create it in Group Accounts.`;
+      }
+      return `${msg} ${prefill.group_label}'s registration is marked Scheduled.${account}`;
     }
     return msg;
   });

@@ -297,14 +297,10 @@ describe("groups & student privacy", () => {
     expect(groupScoringStarted(Object.values(s.bundles), "p-g7")).toBe(false);
   });
 
-  it("a student sees only their own grade; staff see everyone", () => {
+  it("the group's account sees every member's grade, like staff", () => {
     const b = state().bundles["sess-g4-final"];
     const andrea = resolveViewer(USERS.find((u) => u.id === "u-stud")!, b);
-    const own = gradeVisibleMembers(andrea, b);
-    expect(own.map((m) => m.student_name)).toEqual(["Andrea Lim"]);
-    const c = consolidate({ ...b, members: own }, undefined, { includeUnsubmitted: true });
-    expect(c.students).toHaveLength(1);
-    expect(c.stats.some((st) => st.student && st.student.id !== "m-g4-1")).toBe(false);
+    expect(gradeVisibleMembers(andrea, b)).toHaveLength(3);
     const adviser = resolveViewer(USERS.find((u) => u.id === "u-reyes")!, b);
     expect(gradeVisibleMembers(adviser, b)).toHaveLength(3);
   });
@@ -314,7 +310,7 @@ describe("group self-registration", () => {
   const good = {
     group_label: "Group 9", title: "Barangay Health Records System", academic_year: "2026-2027",
     adviser_id: "u-reyes", adviser_name: "", manuscript_url: "https://drive.google.com/x", demo_url: "", abstract: "",
-    contact_email: "Leader@JHCSC.edu.ph",
+    contact_email: "", authorized_index: 0, password: "groupsecret",
     members: [
       { student_name: "Ana Cruz", student_number: "2022-00811", email: "acruz@jhcsc.edu.ph" },
       { student_name: "Ben Ramos", student_number: "2022-00812", email: "bramos@jhcsc.edu.ph" },
@@ -324,12 +320,13 @@ describe("group self-registration", () => {
     expect(registrationProblems(good)).toEqual([]);
   });
   it("flags missing and malformed fields", () => {
-    const p = registrationProblems({ ...good, title: " ", academic_year: "2026-2028", adviser_id: null, contact_email: "x",
+    const p = registrationProblems({ ...good, title: " ", academic_year: "2026-2028", adviser_id: null, password: "short", authorized_index: 5,
       manuscript_url: "drive.google.com", members: [{ student_name: "", student_number: "", email: "nope" }] });
     expect(p.join(" ")).toMatch(/title/);
     expect(p.join(" ")).toMatch(/consecutive/);
     expect(p.join(" ")).toMatch(/adviser/);
-    expect(p.join(" ")).toMatch(/contact email/);
+    expect(p.join(" ")).toMatch(/at least 8 characters/);
+    expect(p.join(" ")).toMatch(/sign in for the group/);
     expect(p.join(" ")).toMatch(/https/);
     expect(p.join(" ")).toMatch(/Member 1: full name/);
     expect(p.join(" ")).toMatch(/student number is required/);
@@ -345,7 +342,7 @@ describe("group self-registration", () => {
   it("cleans input and formats members for the schedule form", () => {
     const c = cleanRegistration({ ...good, title: "  Title  ", adviser_name: "ignored" });
     expect(c.title).toBe("Title");
-    expect(c.contact_email).toBe("leader@jhcsc.edu.ph");
+    expect(c.contact_email).toBe("acruz@jhcsc.edu.ph"); // the authorized member
     expect(c.adviser_name).toBe("");
     expect(membersToText(c.members)).toBe("Ana Cruz, 2022-00811, acruz@jhcsc.edu.ph\nBen Ramos, 2022-00812, bramos@jhcsc.edu.ph");
     expect(parseMembers(membersToText(c.members))).toEqual(c.members);

@@ -1,7 +1,6 @@
-import { AdminConsole } from "@/components/admin/admin-console";
+import { redirect } from "next/navigation";
 
-export const metadata = { title: "Student Accounts · CDEMS" };
-
+// Student Accounts was replaced by one account per group.
 export default function StudentsPage() {
-  return <AdminConsole initialTab="students" />;
+  redirect("/admin/group-accounts");
 }

@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { uid } from "./utils";
@@ -79,6 +79,10 @@ export interface StoreOps {
   updateMember(memberId: string, input: MemberInput): Promise<void>;
   removeMember(memberId: string): Promise<void>;
   createMemberAccounts(projectId: string): Promise<MemberAccountResult[]>;
+  /** Creates the group's single sign-in account for one chosen member (temporary password). */
+  createGroupAccount(memberId: string): Promise<MemberAccountResult>;
+  /** After scheduling from a registration: creates the authorized member's account with the password the group chose. */
+  activateGroupAccount(registrationId: string): Promise<GroupAccountActivation>;
   /** Public (signed-out) group registration. */
   registrationInfo(code: string): Promise<RegistrationFormInfo>;
   submitRegistration(code: string, input: RegistrationInput): Promise<void>;
@@ -407,6 +411,49 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         if (groupScoringStarted(Object.values(s.bundles), b.project.id)) throw new Error("Group membership is locked once scoring has started.");
         replaceAll(mapMembers(s, b.project.id, (ms) => ms.filter((m) => m.id !== memberId)));
       },
+      async createGroupAccount(memberId) {
+        let s = stateRef.current;
+        const b = Object.values(s.bundles).find((x) => x.members.some((m) => m.id === memberId));
+        if (!b) throw new Error("Member not found.");
+        const m = b.members.find((x) => x.id === memberId)!;
+        const holder = groupAccountHolder(b.members);
+        if (holder) throw new Error(`This group already has its account (${holder.student_name}). Delete that account first to choose another member.`);
+        if (!m.email) throw new Error(`Add an email for ${m.student_name} first.`);
+        const email = m.email.toLowerCase();
+        const existing = s.accounts.find((a) => a.email.toLowerCase() === email);
+        if (existing && existing.role !== "student") throw new Error(`${email} belongs to a faculty account.`);
+        const account: Account = existing ?? {
+          id: uid("u"), email, full_name: m.student_name, role: "student", department: b.project.group_label,
+          is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+        };
+        s = { ...mapMembers(s, b.project.id, (ms) => ms.map((x) => (x.id === m.id ? { ...x, user_id: account.id } : x))),
+              accounts: existing ? s.accounts : [...s.accounts, account] };
+        replaceAll(s);
+        return { memberId: m.id, name: m.student_name, email, tempPassword: existing ? null : generateTempPassword(), linkedExisting: !!existing };
+      },
+      async activateGroupAccount(registrationId) {
+        let s = stateRef.current;
+        const r = s.registrations.find((x) => x.id === registrationId);
+        if (!r) throw new Error("Registration not found.");
+        const chosen = r.members[r.authorized_index] ?? r.members[0];
+        const email = chosen.email.toLowerCase();
+        const b = Object.values(s.bundles).find((x) => x.project.title === r.title && x.project.group_label === r.group_label
+          && x.members.some((m) => (m.email ?? "").toLowerCase() === email));
+        if (!b) return { status: "not_found", name: chosen.student_name, email };
+        const holder = groupAccountHolder(b.members);
+        if (holder) return { status: "exists", name: holder.student_name, email };
+        const m = b.members.find((x) => (x.email ?? "").toLowerCase() === email)!;
+        const existing = s.accounts.find((a) => a.email.toLowerCase() === email);
+        if (existing && existing.role !== "student") throw new Error(`${email} belongs to a faculty account.`);
+        const account: Account = existing ?? {
+          id: uid("u"), email, full_name: m.student_name, role: "student", department: r.group_label,
+          is_active: true, created_at: new Date().toISOString(), last_sign_in_at: null,
+        };
+        s = { ...mapMembers(s, b.project.id, (ms) => ms.map((x) => (x.id === m.id ? { ...x, user_id: account.id } : x))),
+              accounts: existing ? s.accounts : [...s.accounts, account] };
+        replaceAll(s);
+        return { status: existing ? "linked" : "created", name: m.student_name, email };
+      },
       async createMemberAccounts(projectId) {
         let s = stateRef.current;
         const b = Object.values(s.bundles).find((x) => x.project.id === projectId);
@@ -447,7 +494,9 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         if (input.adviser_id && !s.accounts.some((a) => a.id === input.adviser_id && ADVISER_ROLES.includes(a.role))) throw new Error("Choose an adviser from the list.");
         const problems = registrationProblems(input);
         if (problems.length) throw new Error(problems.join(" "));
-        const reg: GroupRegistration = { ...cleanRegistration(input), id: uid("reg"), status: "pending", created_at: new Date().toISOString() };
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { password, ...clean } = cleanRegistration(input); // demo keeps no passwords
+        const reg: GroupRegistration = { ...clean, id: uid("reg"), status: "pending", created_at: new Date().toISOString() };
         replaceAll({ ...s, registrations: [reg, ...s.registrations] });
       },
       async listRegistrations() {

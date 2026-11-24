@@ -403,6 +403,22 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       await repo.removeMember(sb, memberId);
       await loadAll();
     },
+    async createGroupAccount(memberId) {
+      const b = Object.values(stateRef.current.bundles).find((x) => x.members.some((m) => m.id === memberId));
+      const m = b?.members.find((x) => x.id === memberId);
+      if (!b || !m) throw new Error("Member not found.");
+      const { userId, tempPassword, linkedExisting } = await repo.createMemberAccount(sb, memberId);
+      void userId;
+      setUsers(await repo.listUsers(sb));
+      await loadAll();
+      return { memberId, name: m.student_name, email: (m.email ?? "").toLowerCase(), tempPassword, linkedExisting };
+    },
+    async activateGroupAccount(registrationId) {
+      const res = await repo.activateGroupAccount(sb, registrationId);
+      setUsers(await repo.listUsers(sb));
+      await loadAll();
+      return res;
+    },
     async createMemberAccounts(projectId) {
       const b = Object.values(stateRef.current.bundles).find((x) => x.project.id === projectId);
       if (!b) throw new Error("Group not found.");

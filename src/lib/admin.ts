@@ -532,9 +532,9 @@ export function gradeVisibleMembers(
   viewer: { user: User; isAdmin: boolean; isPanelist: boolean; isSecretary: boolean; isAdviser: boolean; isStudent: boolean },
   bundle: Pick<SessionBundle, "members">,
 ): ProjectMember[] {
-  const staff = viewer.isAdmin || viewer.isPanelist || viewer.isSecretary || viewer.isAdviser;
-  if (staff || !viewer.isStudent) return bundle.members;
-  return bundle.members.filter((m) => m.user_id === viewer.user.id);
+  // One account per group: the group's authorized member sees every member's grade.
+  void viewer;
+  return bundle.members;
 }
 
 // ---------------------------------------------------------------------------
@@ -566,7 +566,9 @@ export function registrationProblems(r: RegistrationInput): string[] {
   if (!ACADEMIC_YEAR_RE.test(ay)) p.push("Academic year must look like 2026-2027.");
   else if (Number(ay.slice(5)) !== Number(ay.slice(0, 4)) + 1) p.push("Academic year must be two consecutive years, e.g. 2026-2027.");
   if (!r.adviser_id && !r.adviser_name.trim()) p.push("Choose your adviser, or type their name if they are not listed.");
-  if (!EMAIL_RE.test(r.contact_email.trim())) p.push("Enter a valid contact email for the group leader.");
+  if (r.authorized_index < 0 || r.authorized_index >= r.members.length) p.push("Choose which member will sign in for the group.");
+  if (r.password.length < 8) p.push("The group account password must be at least 8 characters.");
+  else if (r.password.length > 72) p.push("The group account password must be at most 72 characters.");
   if (r.manuscript_url.trim() && !isUrl(r.manuscript_url.trim())) p.push("Manuscript link must start with https://");
   if (r.demo_url.trim() && !isUrl(r.demo_url.trim())) p.push("Demo link must start with https://");
   if (r.members.length === 0) p.push("Add at least one member.");
@@ -598,7 +600,9 @@ export function cleanRegistration(r: RegistrationInput): RegistrationInput {
     adviser_id: r.adviser_id || null, adviser_name: r.adviser_id ? "" : r.adviser_name.trim(),
     members: r.members.map((m) => ({ student_name: m.student_name.trim(), student_number: m.student_number.trim(), email: m.email.trim().toLowerCase() })),
     manuscript_url: r.manuscript_url.trim(), demo_url: r.demo_url.trim(), abstract: r.abstract.trim(),
-    contact_email: r.contact_email.trim().toLowerCase(),
+    contact_email: (r.members[r.authorized_index]?.email ?? r.contact_email).trim().toLowerCase(),
+    authorized_index: r.authorized_index,
+    password: r.password,
   };
 }
 
@@ -638,3 +642,6 @@ export function accountDeleteProblem(accountId: string, bundles: SessionBundle[]
     ? "This person appears on defense records (panel, adviser, secretary or minutes). Disable the account instead so those records stay complete."
     : null;
 }
+
+/** The member who holds the group's single sign-in account, if any. */
+export const groupAccountHolder = (members: ProjectMember[]) => members.find((m) => !!m.user_id) ?? null;

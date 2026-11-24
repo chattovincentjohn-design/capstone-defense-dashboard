@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { groupScoringStarted, listProjects, memberProblems } from "@/lib/admin";
 import { useStore, type MemberAccountResult } from "@/lib/store";
 import { STAGE_LABEL, type MemberInput, type ProjectMember } from "@/lib/types";
@@ -32,7 +33,7 @@ export function GroupsManager() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          {projects.length} groups · {totals.members} proponents · {totals.linked} with sign-in accounts
+          {projects.length} groups · {totals.members} proponents · {totals.linked} with a group account
         </p>
         <label className="relative">
           <span className="sr-only">Search groups</span>
@@ -41,8 +42,8 @@ export function GroupsManager() {
         </label>
       </div>
       <p className="text-xs text-muted-foreground">
-        New groups are registered when you schedule their first defense. Each student gets their own sign-in and,
-        after the defense is locked, sees the verdict, comments, minutes and <span className="text-foreground">only their own grade</span>.
+        New groups are registered when you schedule their first defense. Each group has <span className="text-foreground">one sign-in account</span> held by an authorized member;
+        after the defense is locked it sees the verdict, comments, minutes and every member&apos;s grade.
       </p>
 
       {shown.length === 0 && <p className="text-sm text-muted-foreground">No groups match.</p>}
@@ -66,8 +67,10 @@ function GroupCard({ title, projectId, members, stages, locked, ops }: {
   const [results, setResults] = React.useState<MemberAccountResult[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const ready = members.filter((m) => !m.user_id && m.email);
-  const missingEmail = members.filter((m) => !m.user_id && !m.email);
+  const holder = members.find((m) => !!m.user_id) ?? null;
+  const eligible = members.filter((m) => !m.user_id && m.email);
+  const [chosen, setChosen] = React.useState("");
+  const chosenId = eligible.some((m) => m.id === chosen) ? chosen : eligible[0]?.id ?? "";
 
   const run = async (fn: () => Promise<unknown>) => {
     setError(null);
@@ -106,8 +109,9 @@ function GroupCard({ title, projectId, members, stages, locked, ops }: {
                   <td className="px-2 py-2 tabular-nums">{m.student_number}</td>
                   <td className="px-2 py-2 text-xs">{m.email || <span className="text-muted-foreground">—</span>}</td>
                   <td className="px-2 py-2">
-                    {m.user_id ? <Badge variant="success"><UserCheck className="size-3" /> Account linked</Badge>
-                      : m.email ? <Badge variant="muted">Ready to create</Badge>
+                    {m.user_id ? <Badge variant="success"><UserCheck className="size-3" /> Group account</Badge>
+                      : holder ? <span className="text-xs text-muted-foreground">—</span>
+                      : m.email ? <Badge variant="muted">Eligible</Badge>
                       : <Badge variant="warning">Needs email</Badge>}
                   </td>
                   <td className="py-2 pl-2">
@@ -141,17 +145,25 @@ function GroupCard({ title, projectId, members, stages, locked, ops }: {
         <div className="flex flex-wrap items-center gap-2">
           <Button size="sm" variant="outline" disabled={locked || adding} onClick={() => { setAdding(true); setEditing(null); }}
             title={locked ? "Members can't be added once scoring has started" : undefined}><Plus /> Add member</Button>
-          <Button size="sm" disabled={creating || ready.length === 0} onClick={async () => {
-            setCreating(true); setResults(null);
-            await run(async () => setResults(await ops.createMemberAccounts(projectId)));
-            setCreating(false);
-          }}>
-            <KeyRound /> {creating ? "Creating…" : `Create sign-in accounts${ready.length ? ` (${ready.length})` : ""}`}
-          </Button>
-          {missingEmail.length > 0 && (
+          {holder ? (
             <span className="text-xs text-muted-foreground">
-              {missingEmail.length} member{missingEmail.length > 1 ? "s need" : " needs"} an email first (use the pencil).
+              Group account: <b className="text-foreground">{holder.student_name}</b> ({holder.email}). Manage it in Group Accounts.
             </span>
+          ) : eligible.length === 0 ? (
+            <span className="text-xs text-muted-foreground">Add an email to a member (pencil) to create the group&apos;s account.</span>
+          ) : (
+            <>
+              <NativeSelect aria-label="Authorized member" className="h-8 w-60 text-xs" value={chosenId} onChange={(e) => setChosen(e.target.value)}>
+                {eligible.map((m) => <option key={m.id} value={m.id}>{m.student_name} — {m.email}</option>)}
+              </NativeSelect>
+              <Button size="sm" disabled={creating || !chosenId} onClick={async () => {
+                setCreating(true); setResults(null);
+                await run(async () => setResults([await ops.createGroupAccount(chosenId)]));
+                setCreating(false);
+              }}>
+                <KeyRound /> {creating ? "Creating…" : "Create group account"}
+              </Button>
+            </>
           )}
         </div>
 
@@ -233,7 +245,7 @@ function ResultsCard({ results, onClose }: { results: MemberAccountResult[]; onC
             {copied ? <Check /> : <Copy />} {copied ? "Copied" : "Copy all sign-in details"}
           </Button>
           <span className="text-xs text-muted-foreground">
-            {mode === "demo" ? "Demo mode: passwords are illustrative." : "Shown only once. Give each student their own details privately; they can also use “Forgot password?”."}
+            {mode === "demo" ? "Demo mode: passwords are illustrative." : "Shown only once. Give it to the group's authorized member privately; they can also use “Forgot password?”."}
           </span>
         </div>
       )}
