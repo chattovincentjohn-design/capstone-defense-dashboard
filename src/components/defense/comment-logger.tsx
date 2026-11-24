@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { canComment, canSeeCommentsOf, type Viewer } from "@/lib/permissions";
+import { appendDictation, DictationButton } from "./dictation";
 import {
   CATEGORY_LABEL, SEVERITY_LABEL, type CommentCategory, type CommentSeverity, type PanelComment, type SessionBundle, type User,
 } from "@/lib/types";
@@ -61,7 +62,8 @@ export function CommentLogger({ bundle, viewer, userById, onAdd, onDelete }: {
             </fieldset>
           </div>
           <Label htmlFor="cm-text" className="sr-only">Comment</Label>
-          <Textarea id="cm-text" rows={3} placeholder="Type your comment here…" value={text} onChange={(e) => setText(e.target.value)} />
+          <DictationButton onText={(spoken) => setText((t) => appendDictation(t, spoken))} />
+          <Textarea id="cm-text" rows={3} placeholder="Type your comment here, or click Speak and say it…" value={text} onChange={(e) => setText(e.target.value)} />
           <div className="flex justify-end">
             <Button size="sm" type="submit" disabled={!text.trim()}><MessageSquarePlus /> Log Comment</Button>
           </div>

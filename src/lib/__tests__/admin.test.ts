@@ -451,3 +451,13 @@ describe("starting a defense", () => {
     expect(canScore(resolveViewer(USERS.find((u) => u.id === a.faculty_id)!, started), started)).toBe(true);
   });
 });
+
+describe("voice input", () => {
+  it("adds dictated phrases with spacing and sentence capitals", async () => {
+    const { appendDictation } = await import("../dictation");
+    expect(appendDictation("", "update chapter four")).toBe("Update chapter four");
+    expect(appendDictation("Update chapter four", "and the figures")).toBe("Update chapter four and the figures");
+    expect(appendDictation("Fix the schema.", "add an index")).toBe("Fix the schema. Add an index");
+    expect(appendDictation("Keep this ", "   ")).toBe("Keep this ");
+  });
+});
