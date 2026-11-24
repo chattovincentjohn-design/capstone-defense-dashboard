@@ -27,6 +27,7 @@ function recognitionCtor(): RecognitionCtor | null {
 export const DICTATION_LANGUAGES = [
   { code: "en-PH", label: "English" },
   { code: "fil-PH", label: "Filipino" },
+  { code: "ceb-PH", label: "Cebuano (Bisaya)" },
 ] as const;
 
 const ERRORS: Record<string, string> = {
@@ -35,6 +36,7 @@ const ERRORS: Record<string, string> = {
   "no-speech": "No speech was heard. Click the microphone and speak again.",
   "audio-capture": "No microphone was found. Check that one is connected.",
   network: "Voice input needs an internet connection. Check your connection and try again.",
+  "language-not-supported": "This browser cannot recognise the chosen language yet. Choose Filipino or English, or type the comment.",
 };
 
 
@@ -107,7 +109,7 @@ export function DictationButton({ onText, disabled = false }: { onText: (spoken:
             <Mic /> Speak
           </Button>
         )}
-        <NativeSelect aria-label="Voice input language" className="h-8 w-32 text-xs" value={lang} disabled={listening}
+        <NativeSelect aria-label="Voice input language" className="h-8 w-40 text-xs" value={lang} disabled={listening}
           onChange={(e) => { setLang(e.target.value); try { localStorage.setItem("cdems-dictation-lang", e.target.value); } catch { /* ignore */ } }}>
           {DICTATION_LANGUAGES.map((l) => <option key={l.code} value={l.code}>{l.label}</option>)}
         </NativeSelect>
