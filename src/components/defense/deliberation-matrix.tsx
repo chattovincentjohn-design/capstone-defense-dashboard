@@ -148,7 +148,6 @@ function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof Deli
           <div className="flex flex-wrap gap-2 pt-1">
             <Button asChild size="sm" variant="outline"><Link href={`/print/${bundle.session.id}/rating-sheet`} target="_blank"><Printer /> Rating Sheet</Link></Button>
             <Button asChild size="sm" variant="outline"><Link href={`/print/${bundle.session.id}/minutes`} target="_blank"><Printer /> Minutes</Link></Button>
-            <Button asChild size="sm" variant="outline"><Link href={`/print/${bundle.session.id}/approval-sheet`} target="_blank"><Printer /> Approval Sheet</Link></Button>
           </div>
         </div>
       ) : canFinalize(viewer, bundle) ? (

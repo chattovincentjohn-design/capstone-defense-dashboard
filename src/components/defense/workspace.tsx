@@ -95,7 +95,6 @@ export function DefenseWorkspace({ sessionId }: { sessionId: string }) {
               <div className="flex flex-col gap-2">
                 <Button asChild size="sm" variant="outline"><Link href={`/print/${sessionId}/rating-sheet`} target="_blank"><Printer /> Rating Sheet</Link></Button>
                 <Button asChild size="sm" variant="outline"><Link href={`/print/${sessionId}/minutes`} target="_blank"><Printer /> Minutes of the Defense</Link></Button>
-                <Button asChild size="sm" variant="outline"><Link href={`/print/${sessionId}/approval-sheet`} target="_blank"><Printer /> Approval Sheet</Link></Button>
               </div>
             </CardContent>
           </Card>

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountDeleteProblem, defenseRequestChecklist, defenseRequestReady, manuscriptFileProblem, accountProblems, emailChangeProblem, joinAuthors, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountDeleteProblem, defenseRequestChecklist, defenseRequestReady, manuscriptFileProblem, accountProblems, emailChangeProblem, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -391,14 +391,6 @@ describe("faculty self sign-up", () => {
   it("never allows Coordinator or Super Admin", () => {
     expect(facultySignupProblems({ ...ok, role: "admin" }, "longenough")).toContain("Choose your role.");
     expect(facultySignupProblems({ ...ok, role: "superadmin" }, "longenough")).toContain("Choose your role.");
-  });
-});
-
-describe("approval sheet", () => {
-  it("lists authors like the template", () => {
-    expect(joinAuthors(["Ana"])).toBe("Ana");
-    expect(joinAuthors(["Ana", "Ben"])).toBe("Ana and Ben");
-    expect(joinAuthors(["Ana", "Ben", "Cy"])).toBe("Ana, Ben, and Cy");
   });
 });
 
