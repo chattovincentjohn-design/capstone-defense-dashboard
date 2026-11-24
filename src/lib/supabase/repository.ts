@@ -383,3 +383,8 @@ export async function saveFacultySignupSettings(sb: SupabaseClient, s: import(".
     .update({ faculty_open: s.is_open, faculty_code: s.access_code.trim(), updated_at: new Date().toISOString() }).eq("id", 1);
   if (error) throw error;
 }
+
+export async function deleteAccount(sb: SupabaseClient, id: string) {
+  const { error } = await sb.rpc("admin_delete_account", { p_user: id });
+  if (error) throw error;
+}

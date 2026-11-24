@@ -8,7 +8,7 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
@@ -73,6 +73,8 @@ export interface StoreOps {
   changeEmail(id: string, email: string): Promise<void>;
   resetPassword(id: string): Promise<string>;
   setAccountActive(id: string, active: boolean): Promise<void>;
+  /** Permanently removes an account that is not on any defense record. */
+  deleteAccount(id: string): Promise<void>;
   addMember(projectId: string, input: MemberInput): Promise<void>;
   updateMember(memberId: string, input: MemberInput): Promise<void>;
   removeMember(memberId: string): Promise<void>;
@@ -338,6 +340,19 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const bundles = Object.fromEntries(Object.entries(s.bundles).map(([k, b]) =>
           [k, { ...b, members: b.members.map((m) => (m.user_id === id ? { ...m, email: e } : m)) }]));
         replaceAll({ ...s, bundles, accounts: s.accounts.map((a) => (a.id === id ? { ...a, email: e } : a)) });
+      },
+      async deleteAccount(id) {
+        const s = stateRef.current;
+        const target = s.accounts.find((a) => a.id === id);
+        if (!target) throw new Error("Account not found.");
+        if (id === s.currentUserId) throw new Error("You cannot delete your own account.");
+        const actor = s.accounts.find((a) => a.id === s.currentUserId)!;
+        if (!canManageAccount(actor, target)) throw new Error("Only the Super Admin can manage Coordinator accounts.");
+        const problem = accountDeleteProblem(id, Object.values(s.bundles));
+        if (problem) throw new Error(problem);
+        const bundles = Object.fromEntries(Object.entries(s.bundles).map(([k, b]) =>
+          [k, { ...b, members: b.members.map((m) => (m.user_id === id ? { ...m, user_id: null } : m)) }]));
+        replaceAll({ ...s, bundles, accounts: s.accounts.filter((a) => a.id !== id) });
       },
       async resetPassword(id) {
         const s = stateRef.current;

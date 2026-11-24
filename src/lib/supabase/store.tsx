@@ -367,6 +367,10 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
       setUsers(await repo.listUsers(sb));
       await loadAll();
     },
+    async deleteAccount(id) {
+      await repo.deleteAccount(sb, id);
+      setUsers(await repo.listUsers(sb));
+    },
     resetPassword: (id) => repo.resetPassword(sb, id),
     setAccountActive: (id, active) => repo.setAccountActive(sb, id, active),
 

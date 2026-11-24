@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { Check, Copy, KeyRound, Pencil, Power, PowerOff, Search, UserPlus, X, XCircle } from "lucide-react";
+import { Check, Copy, KeyRound, Pencil, Power, PowerOff, Search, Trash2, UserPlus, X, XCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,7 +28,7 @@ export function AccountsManager() {
   const [showForm, setShowForm] = React.useState(false);
   const [credential, setCredential] = React.useState<Credential | null>(null);
   const [notice, setNotice] = React.useState<{ ok: boolean; text: string } | null>(null);
-  const [confirm, setConfirm] = React.useState<{ id: string; action: "reset" | "disable" } | null>(null);
+  const [confirm, setConfirm] = React.useState<{ id: string; action: "reset" | "disable" | "delete" } | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
   const reload = React.useCallback(async () => {
@@ -163,16 +163,20 @@ export function AccountsManager() {
                       {confirm?.id === a.id ? (
                         <div className="flex items-center justify-end gap-1">
                           <span className="mr-1 text-xs text-muted-foreground">
-                            {confirm.action === "reset" ? "Issue a new password and sign them out?" : "Disable sign-in?"}
+                            {confirm.action === "reset" ? "Issue a new password and sign them out?"
+                              : confirm.action === "delete" ? "Delete this account permanently? This cannot be undone."
+                              : "Disable sign-in?"}
                           </span>
-                          <Button size="sm" variant={confirm.action === "disable" ? "destructive" : "default"} disabled={busy}
+                          <Button size="sm" variant={confirm.action === "reset" ? "default" : "destructive"} disabled={busy}
                             onClick={() => confirm.action === "reset"
                               ? void act(a.id, async () => {
                                   const password = await ops.resetPassword(a.id);
                                   setCredential({ kind: "reset", name: a.full_name, email: a.email, password });
                                 }, `Password reset for ${a.full_name}. They have been signed out.`)
-                              : void act(a.id, () => ops.setAccountActive(a.id, false), `${a.full_name} can no longer sign in.`)}>
-                            Confirm
+                              : confirm.action === "delete"
+                                ? void act(a.id, () => ops.deleteAccount(a.id), `${a.full_name}'s account was deleted.`)
+                                : void act(a.id, () => ops.setAccountActive(a.id, false), `${a.full_name} can no longer sign in.`)}>
+                            {confirm.action === "delete" ? "Delete" : "Confirm"}
                           </Button>
                           <Button size="sm" variant="ghost" onClick={() => setConfirm(null)}>Cancel</Button>
                         </div>
@@ -187,6 +191,9 @@ export function AccountsManager() {
                             <Button size="sm" variant="ghost" disabled={busy || !manageable} title={lockedHint} aria-label={`Enable ${a.full_name}`}
                               onClick={() => void act(a.id, () => ops.setAccountActive(a.id, true), `${a.full_name} can sign in again.`)}><Power /> Enable</Button>
                           )}
+                          <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" disabled={busy || self || !manageable}
+                            title={self ? "You cannot delete your own account" : lockedHint}
+                            onClick={() => setConfirm({ id: a.id, action: "delete" })} aria-label={`Delete ${a.full_name}`}><Trash2 /> Delete</Button>
                         </div>
                       )}
                     </td>

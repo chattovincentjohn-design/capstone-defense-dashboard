@@ -626,3 +626,15 @@ export function joinAuthors(names: string[]) {
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")}, and ${names.at(-1)}`;
 }
+
+/** Why this account cannot be deleted (it appears on defense records), or null. Mirrors admin_delete_account(). */
+export function accountDeleteProblem(accountId: string, bundles: SessionBundle[]): string | null {
+  const onRecords = bundles.some((b) =>
+    b.assignments.some((a) => a.faculty_id === accountId) ||
+    b.project.adviser_id === accountId ||
+    b.session.secretary_id === accountId ||
+    b.minutes.recorder_id === accountId);
+  return onRecords
+    ? "This person appears on defense records (panel, adviser, secretary or minutes). Disable the account instead so those records stay complete."
+    : null;
+}

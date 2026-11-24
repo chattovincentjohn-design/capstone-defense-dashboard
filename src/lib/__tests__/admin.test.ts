@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountProblems, emailChangeProblem, joinAuthors, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, accountDeleteProblem, accountProblems, emailChangeProblem, joinAuthors, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -400,5 +400,17 @@ describe("approval sheet", () => {
     expect(joinAuthors(["Ana"])).toBe("Ana");
     expect(joinAuthors(["Ana", "Ben"])).toBe("Ana and Ben");
     expect(joinAuthors(["Ana", "Ben", "Cy"])).toBe("Ana, Ben, and Cy");
+  });
+});
+
+describe("deleting an account", () => {
+  const bundles = Object.values(state().bundles);
+  it("refuses people on defense records", () => {
+    const panelist = bundles[0].assignments[0].faculty_id;
+    expect(accountDeleteProblem(panelist, bundles)).toMatch(/Disable the account instead/);
+    expect(accountDeleteProblem(bundles[0].project.adviser_id!, bundles)).toMatch(/defense records/);
+  });
+  it("allows people with no records", () => {
+    expect(accountDeleteProblem("someone-new", bundles)).toBeNull();
   });
 });
