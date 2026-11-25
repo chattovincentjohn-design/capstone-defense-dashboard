@@ -98,13 +98,6 @@ export function criterionPercent(score: number, maxScore: number): number {
   return lo.percent + (hi.percent - lo.percent) * (s - lo.rating);
 }
 
-/** How a recorded score is shown: rating-scale items as their percentage (98, 88.5…), others as points. */
-export function scoreLabel(score: number | undefined, c: Pick<RubricCriterion, "max_score">): string {
-  if (score === undefined) return "—";
-  const v = usesRatingScale(c) ? criterionPercent(score, 5) : score;
-  return String(Number(v.toFixed(2)));
-}
-
 export function weightedScore(
   criteria: RubricCriterion[],
   lookup: (c: RubricCriterion) => number | undefined,
