@@ -197,7 +197,7 @@ function RatingLegend() {
   return (
     <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md border bg-background/40 px-3 py-2 text-[11px] text-muted-foreground">
       {RATING_SCALE.map((r) => (
-        <span key={r.rating}><b className="text-foreground">{r.rating}</b> = {r.band} {r.label}</span>
+        <span key={r.rating}><b className="text-foreground">{r.percent}</b> = {r.band} {r.label}</span>
       ))}
     </div>
   );
@@ -210,7 +210,7 @@ function CriterionRow({ index, criterion, value, disabled, onChange }: {
   return <PointsRow index={index} criterion={criterion} value={value} disabled={disabled} onChange={onChange} />;
 }
 
-/** 1–5 check boxes, as on the JHCSC Capstone Rating Sheet. */
+/** The rating sheet's five boxes, labelled with the percentage each one counts as (98 · 93 · 88.5 · 85 · 80). */
 function RatingRow({ index, criterion, value, disabled, onChange }: {
   index: number; criterion: RubricCriterion; value: number | undefined; disabled: boolean; onChange: (v: number) => void;
 }) {
@@ -222,16 +222,16 @@ function RatingRow({ index, criterion, value, disabled, onChange }: {
           const on = value === r.rating;
           return (
             <button key={r.rating} type="button" role="radio" aria-checked={on} disabled={disabled}
-              aria-label={`${r.rating}: ${r.label}`} title={`${r.rating} = ${r.band} ${r.label}`}
+              aria-label={`${r.percent}: ${r.label}`} title={`${r.percent} (${r.band}) ${r.label}`}
               onClick={() => onChange(r.rating)}
-              className={cn("size-9 rounded-md border text-sm font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              className={cn("h-9 w-12 rounded-md border text-sm font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50",
                 on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent")}>
-              {r.rating}
+              {r.percent}
             </button>
           );
         })}
-        <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
-          {value !== undefined ? `${round(criterionPercent(value, 5), 2)}%` : "—"}
+        <span className="hidden w-28 text-right text-[11px] leading-tight text-muted-foreground lg:inline">
+          {value !== undefined ? (RATING_SCALE.find((r) => r.rating === value)?.label ?? `${round(criterionPercent(value, 5), 2)}%`) : "—"}
         </span>
       </div>
     </div>

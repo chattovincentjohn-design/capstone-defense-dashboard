@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { gradeVisibleMembers } from "@/lib/admin";
-import { consolidate, transmute } from "@/lib/grading";
+import { consolidate, criterionPercent, scoreLabel, transmute, usesRatingScale } from "@/lib/grading";
 import { allSubmitted, canFinalize, canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
 import { VERDICT_LABEL, type SessionBundle, type User, type Verdict } from "@/lib/types";
@@ -93,11 +93,11 @@ function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof Deli
                       const outlier = s.flagged && v !== undefined && Math.abs(v - s.mean) >= s.range / 2;
                       return (
                         <td key={p.assignment.id} className={cn("px-2 py-1.5 text-right tabular-nums", outlier && "font-semibold text-warning")}>
-                          {v?.toFixed(1) ?? "—"}
+                          {scoreLabel(v, s.criterion)}
                         </td>
                       );
                     })}
-                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{s.mean.toFixed(2)}</td>
+                    <td className="px-2 py-1.5 text-right font-semibold tabular-nums">{meanLabel(s)}</td>
                     <td className={cn("px-2 py-1.5 text-right tabular-nums", s.flagged && "font-semibold text-warning")}>
                       {s.range.toFixed(1)}{s.flagged && " ⚠"}
                     </td>
@@ -178,4 +178,11 @@ function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof Deli
       )}
     </div>
   );
+}
+
+/** Mean shown in the same unit as the cells: average of the percentages for rating-scale items. */
+function meanLabel(s: { criterion: { max_score: number }; byAssignment: Record<string, number | undefined>; mean: number }) {
+  if (!usesRatingScale(s.criterion)) return s.mean.toFixed(2);
+  const xs = Object.values(s.byAssignment).filter((v): v is number => v !== undefined).map((v) => criterionPercent(v, 5));
+  return xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) : "—";
 }

@@ -1,6 +1,6 @@
 "use client";
 import { gradeVisibleMembers } from "@/lib/admin";
-import { configFor, consolidate, RATING_SCALE, splitCriteria, TRANSMUTATION_TABLE, usesRatingScale } from "@/lib/grading";
+import { configFor, consolidate, criterionPercent, RATING_SCALE, scoreLabel, splitCriteria, TRANSMUTATION_TABLE, usesRatingScale } from "@/lib/grading";
 import { canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle, type User } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
@@ -47,8 +47,10 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
                 return (
                   <tr key={cr.id}>
                     <td>{cr.criterion_name}</td><td className="text-center">{cr.weight_percentage}%</td>
-                    {c.panel.map((p) => <td key={p.assignment.id} className="text-center">{st.byAssignment[p.assignment.id]?.toFixed(1) ?? "—"}</td>)}
-                    <td className="text-center font-semibold">{st.mean.toFixed(2)}</td>
+                    {c.panel.map((p) => <td key={p.assignment.id} className="text-center">{scoreLabel(st.byAssignment[p.assignment.id], cr)}</td>)}
+                    <td className="text-center font-semibold">{usesRatingScale(cr)
+                      ? (() => { const xs = c.panel.map((p) => st.byAssignment[p.assignment.id]).filter((v): v is number => v !== undefined).map((v) => criterionPercent(v, 5)); return xs.length ? (xs.reduce((a, b) => a + b, 0) / xs.length).toFixed(2) : "—"; })()
+                      : st.mean.toFixed(2)}</td>
                   </tr>
                 );
               })}
@@ -99,7 +101,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
             </tbody>
           </table>
           <p className="mb-3 text-[8pt] text-neutral-600">
-            {group.some(usesRatingScale) && <>Rating scale: {RATING_SCALE.map((r) => `${r.rating} = ${r.band} (counted as ${r.percent})`).join("; ")}. </>}
+            {group.some(usesRatingScale) && <>Rating scale: {RATING_SCALE.map((r) => `${r.percent} = ${r.band} ${r.label}`).join("; ")}. </>}
             Transmutation: {TRANSMUTATION_TABLE.filter((t) => t.min > 0).map((t) => `≥${t.min}=${t.grade.toFixed(2)}`).join(", ")}, below 75=5.00.
             Final % = Group % × {cfg.groupWeight}% + Individual % × {cfg.individualWeight}%, averaged across panel members.
           </p>

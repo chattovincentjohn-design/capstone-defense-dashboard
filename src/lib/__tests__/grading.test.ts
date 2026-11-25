@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { configFor, consolidate, criterionPercent, evaluatePanelist, transmute, suggestVerdict, weightedScore } from "../grading";
+import { configFor, consolidate, criterionPercent, scoreLabel, evaluatePanelist, transmute, suggestVerdict, weightedScore } from "../grading";
 import { seedBundles } from "../mock-data";
 import { canonicalScorePayload, signEvaluation } from "../signature";
 import { canSeeScoresOf, resolveViewer } from "../permissions";
@@ -27,6 +27,13 @@ describe("weightedScore", () => {
     expect(criterionPercent(0, 5)).toBe(0);
     expect(criterionPercent(9, 10)).toBe(90);
     expect(criterionPercent(21, 30)).toBe(70);
+  });
+
+  it("labels rating-scale scores as percentages and points as points", () => {
+    expect(scoreLabel(3, { max_score: 5 })).toBe("88.5");
+    expect(scoreLabel(5, { max_score: 5 })).toBe("98");
+    expect(scoreLabel(9, { max_score: 10 })).toBe("9");
+    expect(scoreLabel(undefined, { max_score: 5 })).toBe("—");
   });
 
   it("reports incomplete scoring", () => {
