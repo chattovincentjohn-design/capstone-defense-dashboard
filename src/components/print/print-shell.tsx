@@ -37,7 +37,8 @@ export function DocHeader({ title, subtitle }: { title: string; subtitle: string
           <p className="font-bold uppercase">J.H. Cerilles State College</p>
           <p className="text-[10pt]">School of Computing Studies · Office of the Capstone Coordinator</p>
         </div>
-        <div className="w-[72px]" aria-hidden />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/jhcsc-logo.png" alt="J.H. Cerilles State College seal" width={72} height={72} className="size-[72px] object-contain" />
       </div>
       <hr className="my-3 border-black" />
       <h1 className="text-[14pt] font-bold uppercase">{title}</h1>
