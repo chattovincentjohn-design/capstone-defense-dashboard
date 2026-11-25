@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Slider } from "@/components/ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { configFor, evaluatePanelist, scoreLookup, splitCriteria, suggestVerdict, transmute, type WeightedResult } from "@/lib/grading";
+import { configFor, criterionPercent, evaluatePanelist, RATING_SCALE, scoreLookup, splitCriteria, suggestVerdict, transmute, usesRatingScale, type WeightedResult } from "@/lib/grading";
 import { canScore, isStarted, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
 import type { RubricCriterion, SessionBundle } from "@/lib/types";
@@ -65,9 +65,15 @@ function Scorer({ bundle, viewer, onScore, onSubmit }: Props) {
         </TabsList>
 
         <TabsContent value="group" className="space-y-1 p-4">
+          {group.some(usesRatingScale) && <RatingLegend />}
           {group.map((c, i) => (
-            <CriterionRow key={c.id} index={i + 1} criterion={c} value={groupLookup(c)} disabled={!editable}
-              onChange={(v) => onScore(assignment.id, c.id, null, v)} />
+            <React.Fragment key={c.id}>
+              {c.description && c.description !== group[i - 1]?.description && /^[IVX]+\./.test(c.description) && (
+                <p className="pt-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">{c.description}</p>
+              )}
+              <CriterionRow index={i + 1} criterion={c} value={groupLookup(c)} disabled={!editable}
+                onChange={(v) => onScore(assignment.id, c.id, null, v)} />
+            </React.Fragment>
           ))}
           <ScoreLine label="Group weighted score" result={evaluation.group} />
         </TabsContent>
@@ -130,7 +136,7 @@ function Scorer({ bundle, viewer, onScore, onSubmit }: Props) {
             <span className="font-normal text-muted-foreground">available once a proponent is fully scored</span>
           ) : (
             <>
-              {round((avgFinal / 100) * (bundle.criteria[0]?.max_score ?? 5), 2).toFixed(2)} / {(bundle.criteria[0]?.max_score ?? 5).toFixed(1)}{" "}
+              {avgFinal.toFixed(2)}% · Grade {transmute(avgFinal).grade.toFixed(2)}{" "}
               <span className="font-normal text-success">({VERDICT_LABEL[suggestVerdict(avgFinal)]} — your provisional rating)</span>
             </>
           )}
@@ -180,9 +186,19 @@ function ScoreLine({ label, result }: { label: string; result: WeightedResult })
     <div className="flex items-center justify-between border-t pt-2 text-sm">
       <span className="text-muted-foreground">{label}</span>
       <span className="font-semibold tabular-nums">
-        {result.rating.toFixed(2)} / {result.scaleMax.toFixed(1)} · {result.percent.toFixed(2)}%
+        {result.percent.toFixed(2)}%
         {!result.complete && <Badge variant="warning" className="ml-2">{result.scored}/{result.total}</Badge>}
       </span>
+    </div>
+  );
+}
+
+function RatingLegend() {
+  return (
+    <div className="mb-2 flex flex-wrap gap-x-4 gap-y-1 rounded-md border bg-background/40 px-3 py-2 text-[11px] text-muted-foreground">
+      {RATING_SCALE.map((r) => (
+        <span key={r.rating}><b className="text-foreground">{r.rating}</b> = {r.band} {r.label}</span>
+      ))}
     </div>
   );
 }
@@ -190,12 +206,49 @@ function ScoreLine({ label, result }: { label: string; result: WeightedResult })
 function CriterionRow({ index, criterion, value, disabled, onChange }: {
   index: number; criterion: RubricCriterion; value: number | undefined; disabled: boolean; onChange: (v: number) => void;
 }) {
-  const [draft, setDraft] = React.useState(value?.toFixed(1) ?? "");
-  React.useEffect(() => setDraft(value?.toFixed(1) ?? ""), [value]);
+  if (usesRatingScale(criterion)) return <RatingRow index={index} criterion={criterion} value={value} disabled={disabled} onChange={onChange} />;
+  return <PointsRow index={index} criterion={criterion} value={value} disabled={disabled} onChange={onChange} />;
+}
+
+/** 1–5 check boxes, as on the JHCSC Capstone Rating Sheet. */
+function RatingRow({ index, criterion, value, disabled, onChange }: {
+  index: number; criterion: RubricCriterion; value: number | undefined; disabled: boolean; onChange: (v: number) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5 py-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <p className="text-sm font-medium">{index}. {criterion.criterion_name}</p>
+      <div className="flex shrink-0 items-center gap-1" role="radiogroup" aria-label={`${criterion.criterion_name} rating`}>
+        {[...RATING_SCALE].map((r) => {
+          const on = value === r.rating;
+          return (
+            <button key={r.rating} type="button" role="radio" aria-checked={on} disabled={disabled}
+              aria-label={`${r.rating}: ${r.label}`} title={`${r.rating} = ${r.band} ${r.label}`}
+              onClick={() => onChange(r.rating)}
+              className={cn("size-9 rounded-md border text-sm font-semibold tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+                on ? "border-primary bg-primary text-primary-foreground" : "hover:bg-accent")}>
+              {r.rating}
+            </button>
+          );
+        })}
+        <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">
+          {value !== undefined ? `${round(criterionPercent(value, 5), 2)}%` : "—"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function PointsRow({ index, criterion, value, disabled, onChange }: {
+  index: number; criterion: RubricCriterion; value: number | undefined; disabled: boolean; onChange: (v: number) => void;
+}) {
+  const step = criterion.max_score >= 10 ? 1 : 0.1;
+  const fmt = (v: number | undefined) => (v === undefined ? "" : step === 1 ? String(v) : v.toFixed(1));
+  const [draft, setDraft] = React.useState(fmt(value));
+  React.useEffect(() => setDraft(fmt(value)), [value]); // eslint-disable-line react-hooks/exhaustive-deps
   const id = `crit-${criterion.id}`;
   const commit = (raw: string) => {
     const n = Number(raw);
-    if (raw.trim() === "" || Number.isNaN(n)) return setDraft(value?.toFixed(1) ?? "");
+    if (raw.trim() === "" || Number.isNaN(n)) return setDraft(fmt(value));
     onChange(round(Math.min(criterion.max_score, Math.max(0, n)), 1));
   };
 
@@ -204,18 +257,16 @@ function CriterionRow({ index, criterion, value, disabled, onChange }: {
       <div>
         <div className="flex items-baseline justify-between gap-2">
           <label htmlFor={id} className="text-sm font-medium" title={criterion.description ?? ""}>
-            {index}. {criterion.criterion_name} ({criterion.weight_percentage}%)
+            {index}. {criterion.criterion_name} ({criterion.max_score % 1 === 0 ? criterion.max_score : criterion.max_score.toFixed(1)} pts)
           </label>
-          <span className="text-xs tabular-nums text-muted-foreground">{value !== undefined ? value.toFixed(1) : "—"}</span>
+          <span className="text-xs tabular-nums text-muted-foreground">{value !== undefined ? `${fmt(value)} / ${criterion.max_score}` : "—"}</span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="w-28 shrink-0 text-xs text-muted-foreground">Rating: {value !== undefined ? value.toFixed(1) : "–"} / {criterion.max_score.toFixed(1)}</span>
-          <Slider min={0} max={criterion.max_score} step={0.1} value={[value ?? 0]} disabled={disabled}
-            onValueChange={([v]) => onChange(round(v, 1))} aria-label={`${criterion.criterion_name} slider`}
-            className={cn(value === undefined && "opacity-50")} />
-        </div>
+        <Slider min={0} max={criterion.max_score} step={step} value={[value ?? 0]} disabled={disabled}
+          onValueChange={([v]) => onChange(round(v, 1))} aria-label={`${criterion.criterion_name} slider`}
+          className={cn(value === undefined && "opacity-50")} />
       </div>
       <Input id={id} inputMode="decimal" className="h-9 text-center tabular-nums" value={draft} disabled={disabled} placeholder="–"
+        aria-label={`${criterion.criterion_name} points`}
         onChange={(e) => setDraft(e.target.value)} onBlur={(e) => commit(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && commit((e.target as HTMLInputElement).value)} />
     </div>

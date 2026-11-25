@@ -15,29 +15,51 @@ export const USERS: User[] = [
   { id: "u-stud", full_name: "Andrea Lim", email: "alim@student.demo.edu", role: "student", department: "BSIT 4-A" },
 ];
 
-export const FINAL_CRITERIA: RubricCriterion[] = [
-  { id: "c-f-g1", stage: "final", scope: "group", criterion_name: "System Functionality", description: "Completeness, correctness and stability of the deployed system against stated objectives.", weight_percentage: 35, max_score: 5, sort_order: 1 },
-  { id: "c-f-g2", stage: "final", scope: "group", criterion_name: "Technical Documentation", description: "Manuscript quality, adherence to format, user/technical manuals.", weight_percentage: 25, max_score: 5, sort_order: 2 },
-  { id: "c-f-g3", stage: "final", scope: "group", criterion_name: "Methodology & Architecture", description: "Soundness of SDLC, system architecture, database design and testing.", weight_percentage: 25, max_score: 5, sort_order: 3 },
-  { id: "c-f-g4", stage: "final", scope: "group", criterion_name: "Significance & Innovation", description: "Novelty and measurable impact on target beneficiaries.", weight_percentage: 15, max_score: 5, sort_order: 4 },
-  { id: "c-f-i1", stage: "final", scope: "individual", criterion_name: "Presentation Delivery", description: "Clarity, confidence, time management and visual aids.", weight_percentage: 50, max_score: 5, sort_order: 1 },
-  { id: "c-f-i2", stage: "final", scope: "individual", criterion_name: "Q&A Mastery", description: "Accuracy and depth of answers; ownership of the work.", weight_percentage: 50, max_score: 5, sort_order: 2 },
+/** JHCSC Capstone Rating Sheet: 15 group items rated 1–5, then 3 individual items out of 10. */
+export const RATING_SHEET_ITEMS: { section: string; name: string }[] = [
+  { section: "I. Document", name: "Correctness of the statement of the research problem, objectives, significance, scope and limitation" },
+  { section: "I. Document", name: "Clarity of defined requirements" },
+  { section: "I. Document", name: "Completeness of analytic discussion and consistency with design discussions (document content and organization)" },
+  { section: "I. Document", name: "Correctness of the design and implementation issues with respect to the theories and methodologies used in the study" },
+  { section: "I. Document", name: "Presence of citations for non-original material; sufficiency of the list of references used" },
+  { section: "II. Methodology", name: "Definition and application of the software development methodology" },
+  { section: "II. Methodology", name: "Appropriateness of research, data gathering, and analysis tools utilized" },
+  { section: "II. Methodology", name: "Appropriateness of the chosen methodology" },
+  { section: "II. Methodology", name: "Adequacy of data gathered for the study" },
+  { section: "II. Methodology", name: "Adequacy, completeness, and effectiveness of diagrams, graphs, charts, tables, and notations used" },
+  { section: "III. Presentation", name: "Clarity and organization of presentation delivery" },
+  { section: "III. Presentation", name: "Adequacy of visual aids and other tools used for presentation" },
+  { section: "III. Presentation", name: "Ability to answer questions analytically and convincingly" },
+  { section: "III. Presentation", name: "Ability to convince the panelists of the ideas being presented" },
+  { section: "III. Presentation", name: "Ability to discuss/revise program modules as required by the panel members" },
 ];
+export const RATING_SHEET_INDIVIDUAL = ["Communication Skill", "Work Organization", "Effectiveness"];
 
-export const PROPOSAL_CRITERIA: RubricCriterion[] = [
-  { id: "c-p-g1", stage: "proposal", scope: "group", criterion_name: "Problem Statement & Objectives", description: "Specific, measurable, and grounded in evidence.", weight_percentage: 30, max_score: 5, sort_order: 1 },
-  { id: "c-p-g2", stage: "proposal", scope: "group", criterion_name: "Review of Related Literature", description: "Coverage, synthesis, and identified research gap.", weight_percentage: 25, max_score: 5, sort_order: 2 },
-  { id: "c-p-g3", stage: "proposal", scope: "group", criterion_name: "Proposed Methodology & Architecture", description: "Feasibility of design, tools and evaluation plan.", weight_percentage: 30, max_score: 5, sort_order: 3 },
-  { id: "c-p-g4", stage: "proposal", scope: "group", criterion_name: "Significance & Innovation", description: "Expected contribution and beneficiaries.", weight_percentage: 15, max_score: 5, sort_order: 4 },
-  { id: "c-p-i1", stage: "proposal", scope: "individual", criterion_name: "Presentation Delivery", description: "Clarity and organization.", weight_percentage: 50, max_score: 5, sort_order: 1 },
-  { id: "c-p-i2", stage: "proposal", scope: "individual", criterion_name: "Q&A Mastery", description: "Understanding of the proposal.", weight_percentage: 50, max_score: 5, sort_order: 2 },
-];
+/** Equal weights that total exactly 100 at two decimals (15 × ≈6.67, 3 × ≈33.33). */
+const evenWeights = (n: number) => {
+  const base = Math.floor((100 / n) * 100) / 100;
+  const extra = Math.round((100 - base * n) * 100);
+  return Array.from({ length: n }, (_, i) => Math.round((base + (i < extra ? 0.01 : 0)) * 100) / 100);
+};
 
-export const TITLE_CRITERIA: RubricCriterion[] = [
-  { id: "c-t-g1", stage: "title", scope: "group", criterion_name: "Relevance & Feasibility", description: "Alignment with program and doability within the term.", weight_percentage: 50, max_score: 5, sort_order: 1 },
-  { id: "c-t-g2", stage: "title", scope: "group", criterion_name: "Novelty", description: "Distinctness from existing systems.", weight_percentage: 50, max_score: 5, sort_order: 2 },
-  { id: "c-t-i1", stage: "title", scope: "individual", criterion_name: "Presentation & Q&A", description: "Ability to justify the proposed title.", weight_percentage: 100, max_score: 5, sort_order: 1 },
-];
+export function ratingSheetCriteria(stage: DefenseStage, prefix: string): RubricCriterion[] {
+  const gw = evenWeights(RATING_SHEET_ITEMS.length);
+  const iw = evenWeights(RATING_SHEET_INDIVIDUAL.length);
+  return [
+    ...RATING_SHEET_ITEMS.map((it, i): RubricCriterion => ({
+      id: `${prefix}-g${i + 1}`, stage, scope: "group", criterion_name: it.name, description: it.section,
+      weight_percentage: gw[i], max_score: 5, sort_order: i + 1,
+    })),
+    ...RATING_SHEET_INDIVIDUAL.map((name, i): RubricCriterion => ({
+      id: `${prefix}-i${i + 1}`, stage, scope: "individual", criterion_name: name, description: "Individual evaluation (10 points)",
+      weight_percentage: iw[i], max_score: 10, sort_order: i + 1,
+    })),
+  ];
+}
+
+export const FINAL_CRITERIA = ratingSheetCriteria("final", "c-f");
+export const PROPOSAL_CRITERIA = ratingSheetCriteria("proposal", "c-p");
+export const TITLE_CRITERIA = ratingSheetCriteria("title", "c-t");
 
 /** Rubric templates (what the Coordinator edits). Sessions keep their own snapshot. */
 export function seedRubric(): RubricCriterion[] {
@@ -47,9 +69,9 @@ export function seedRubric(): RubricCriterion[] {
 /** Default final-grade blend per stage (Coordinator-editable). */
 export function seedGrading(): Record<DefenseStage, StageBlend> {
   return {
-    title: { groupWeight: 60, individualWeight: 40 },
-    proposal: { groupWeight: 60, individualWeight: 40 },
-    final: { groupWeight: 60, individualWeight: 40 },
+    title: { groupWeight: 30, individualWeight: 70 },
+    proposal: { groupWeight: 30, individualWeight: 70 },
+    final: { groupWeight: 30, individualWeight: 70 },
   };
 }
 
@@ -75,7 +97,7 @@ export function seedBundles(): SessionBundle[] {
         room_or_link: "CCS Audio-Visual Room 2", secretary_id: "u-sec",
         verdict: null, is_locked: false, locked_at: null, chair_signature_hash: null,
         started_at: "2026-11-23T09:05:00+08:00", started_by: "u-ramos",
-        group_weight: 60, individual_weight: 40,
+        group_weight: 30, individual_weight: 70,
       },
       project: {
         id: "p-g4", group_label: "Group 4", title: "IoT-Based Smart Agriculture System",
@@ -95,19 +117,19 @@ export function seedBundles(): SessionBundle[] {
       ],
       criteria: FINAL_CRITERIA,
       scores: [
-        // Chair: group scores in progress, individuals not yet
-        ...scoreRows(S1, "pa-1-ramos", [["c-f-g1", null, 4.5], ["c-f-g2", null, 4.0], ["c-f-g3", null, 4.2], ["c-f-g4", null, 3.8]]),
+        // Chair: group ratings in progress, individuals not yet
+        ...scoreRows(S1, "pa-1-ramos", [5, 4, 4, 4, 3, 4, 5, 4].map((r, i): [string, null, number] => [`c-f-g${i + 1}`, null, r])),
         // Diaz: complete & signed
         ...scoreRows(S1, "pa-2-diaz", [
-          ["c-f-g1", null, 4.6], ["c-f-g2", null, 3.4], ["c-f-g3", null, 4.0], ["c-f-g4", null, 4.2],
-          ["c-f-i1", "m-g4-1", 4.5], ["c-f-i2", "m-g4-1", 4.4],
-          ["c-f-i1", "m-g4-2", 3.8], ["c-f-i2", "m-g4-2", 3.5],
-          ["c-f-i1", "m-g4-3", 4.2], ["c-f-i2", "m-g4-3", 4.0],
+          ...[5, 4, 3, 4, 4, 4, 4, 3, 4, 5, 4, 4, 3, 4, 4].map((r, i): [string, null, number] => [`c-f-g${i + 1}`, null, r]),
+          ["c-f-i1", "m-g4-1", 9], ["c-f-i2", "m-g4-1", 9], ["c-f-i3", "m-g4-1", 8],
+          ["c-f-i1", "m-g4-2", 8], ["c-f-i2", "m-g4-2", 7], ["c-f-i3", "m-g4-2", 8],
+          ["c-f-i1", "m-g4-3", 9], ["c-f-i2", "m-g4-3", 8], ["c-f-i3", "m-g4-3", 8],
         ]),
         // Gomez: partially graded
         ...scoreRows(S1, "pa-3-gomez", [
-          ["c-f-g1", null, 4.4], ["c-f-g2", null, 4.5], ["c-f-g3", null, 3.9],
-          ["c-f-i1", "m-g4-1", 4.6], ["c-f-i2", "m-g4-1", 4.2],
+          ...[4, 5, 4, 4, 4, 3, 4, 4, 4, 4].map((r, i): [string, null, number] => [`c-f-g${i + 1}`, null, r]),
+          ["c-f-i1", "m-g4-1", 9], ["c-f-i2", "m-g4-1", 8],
         ]),
       ],
       comments: [
@@ -140,7 +162,7 @@ export function seedBundles(): SessionBundle[] {
         id: S2, project_id: "p-g7", stage: "proposal", scheduled_at: "2026-11-23T13:30:00+08:00",
         room_or_link: "https://meet.example.com/ccs-defense-7", secretary_id: "u-sec",
         verdict: null, is_locked: false, locked_at: null, chair_signature_hash: null,
-        group_weight: 60, individual_weight: 40,
+        group_weight: 30, individual_weight: 70,
       },
       project: {
         id: "p-g7", group_label: "Group 7", title: "AI-Assisted Enrollment Queue Management System",

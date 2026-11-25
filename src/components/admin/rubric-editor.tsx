@@ -188,6 +188,12 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
               <Badge variant={ok ? "success" : "destructive"} aria-live="polite">Total {t.total}%{ok ? "" : " — must be 100%"}</Badge>
             </CardHeader>
             <CardContent className="space-y-2">
+              {scope === "group" && (
+                <p className="text-xs text-muted-foreground">
+                  Criteria with a maximum of <b>5</b> use the JHCSC rating scale: 5 = 96–100 (counted 98), 4 = 91–95 (93), 3 = 87–90 (88.5),
+                  2 = 84–86 (85), 1 = below 84 (80). Any other maximum is plain points, e.g. 8 out of 10 = 80%.
+                </p>
+              )}
               {list.length === 0 && <p className="text-sm text-muted-foreground">No {scope} criteria. {scope === "individual" && "Students will receive the group score only."}</p>}
               {list.map((c, i) => {
                 const used = c.id.startsWith("new-") ? 0 : usage(c.id);
@@ -216,8 +222,8 @@ function StageEditor({ stage, onDirty }: { stage: DefenseStage; onDirty: (d: boo
                         value={Number.isNaN(c.weight_percentage) ? "" : c.weight_percentage}
                         onChange={(e) => update(c.id, { weight_percentage: e.target.valueAsNumber })} />
                     </label>
-                    <label className="space-y-1">
-                      <span className="text-[11px] text-muted-foreground">Max score</span>
+                    <label className="space-y-1" title="Max score 5 = the 1–5 rating sheet scale (5 = 96–100 … 1 = below 84). Any other maximum is plain points (e.g. 8/10 = 80%).">
+                      <span className="text-[11px] text-muted-foreground">{c.max_score === 5 ? "Rating 1–5" : "Max points"}</span>
                       <Input type="number" inputMode="decimal" min={1} step={1} className="text-right tabular-nums"
                         value={Number.isNaN(c.max_score) ? "" : c.max_score}
                         onChange={(e) => update(c.id, { max_score: e.target.valueAsNumber })} />

@@ -1,10 +1,11 @@
 /**
  * Grade computation engine.
  *
- *  criterion %   = score / max_score
+ *  criterion %   = 1–5 rating → the rating sheet's percentage (RATING_SCALE: 5=98, 4=93, 3=88.5, 2=85, 1=80)
+ *                  any other maximum (e.g. /10 points) → score / max_score
  *  group %       = Σ(criterion% × weight) / Σweight × 100       (group criteria)
  *  individual %  = same, per student                              (individual criteria)
- *  student final = group% × groupWeight + individual% × indivWeight   (per session; default 60/40)
+ *  student final = group% × groupWeight + individual% × indivWeight   (per session; default 30/70 per the JHCSC rating sheet)
  *  consolidated  = mean of each submitted panelist's student final
  *  transmuted    = percentage → 1.00–5.00 college scale (table below)
  */
@@ -22,8 +23,8 @@ export interface GradingConfig {
 }
 
 export const DEFAULT_GRADING_CONFIG: GradingConfig = {
-  groupWeight: 60,
-  individualWeight: 40,
+  groupWeight: 30,
+  individualWeight: 70,
   passingPercent: 75,
   varianceThreshold: 1.0,
 };
@@ -72,25 +73,52 @@ export interface WeightedResult {
   complete: boolean;
 }
 
+/**
+ * JHCSC Capstone Rating Sheet: a 1–5 rating stands for a percentage band; the system uses
+ * the middle of each band. Ratings in between (e.g. 4.5) are interpolated.
+ */
+export const RATING_SCALE: { rating: number; percent: number; band: string; label: string }[] = [
+  { rating: 5, percent: 98, band: "96–100", label: "Excellent" },
+  { rating: 4, percent: 93, band: "91–95", label: "Exceeds Expectations" },
+  { rating: 3, percent: 88.5, band: "87–90", label: "Meets Expectations" },
+  { rating: 2, percent: 85, band: "84–86", label: "Meets Expectations Sometimes" },
+  { rating: 1, percent: 80, band: "below 84", label: "Does not Meet Expectations" },
+];
+
+/** Criteria scored out of 5 use the rating sheet's scale; anything else is points. */
+export const usesRatingScale = (c: Pick<RubricCriterion, "max_score">) => Number(c.max_score) === 5;
+
+/** Percentage (0–100) a single score is worth. */
+export function criterionPercent(score: number, maxScore: number): number {
+  if (Number(maxScore) !== 5) return maxScore > 0 ? (score / maxScore) * 100 : 0;
+  const s = Math.min(5, Math.max(0, score));
+  if (s < 1) return s * RATING_SCALE[4].percent; // below the lowest box: scale down to 0
+  const lo = RATING_SCALE.find((r) => r.rating === Math.floor(s))!;
+  const hi = RATING_SCALE.find((r) => r.rating === Math.ceil(s))!;
+  return lo.percent + (hi.percent - lo.percent) * (s - lo.rating);
+}
+
 export function weightedScore(
   criteria: RubricCriterion[],
   lookup: (c: RubricCriterion) => number | undefined,
 ): WeightedResult {
   const scaleMax = criteria[0]?.max_score ?? 5;
   let num = 0;
+  let raw = 0;
   let den = 0;
   let scored = 0;
   for (const c of criteria) {
     const s = lookup(c);
     if (s === undefined) continue;
     scored++;
-    num += (s / c.max_score) * c.weight_percentage;
+    num += criterionPercent(s, c.max_score) * c.weight_percentage;
+    raw += (s / c.max_score) * c.weight_percentage;
     den += c.weight_percentage;
   }
-  const percent = den ? (num / den) * 100 : 0;
+  const percent = den ? num / den : 0;
   return {
     percent: round(percent, 2),
-    rating: round((percent / 100) * scaleMax, 2),
+    rating: round(den ? (raw / den) * scaleMax : 0, 2),
     scaleMax,
     scored,
     total: criteria.length,

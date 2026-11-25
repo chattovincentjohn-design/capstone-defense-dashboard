@@ -103,7 +103,7 @@ describe("scheduleSession / update / delete", () => {
 describe("saveStageRubric", () => {
   it("rejects weights that do not total 100", () => {
     const s = state();
-    const drafts = activeRubric(s.rubric, "final").map((c) => (c.id === "c-f-g1" ? { ...c, weight_percentage: 40 } : c));
+    const drafts = activeRubric(s.rubric, "final").map((c) => (c.id === "c-f-g1" ? { ...c, weight_percentage: 11.67 } : c));
     expect(rubricProblems(drafts)[0]).toMatch(/105%/);
     expect(() => saveStageRubric(s, "final", drafts)).toThrow();
   });
@@ -111,27 +111,28 @@ describe("saveStageRubric", () => {
   it("versions in-use criteria and leaves scored sessions frozen", () => {
     const s = state();
     const drafts = activeRubric(s.rubric, "final").map((c) =>
-      c.id === "c-f-g1" ? { ...c, weight_percentage: 30 } : c.id === "c-f-g4" ? { ...c, weight_percentage: 20 } : c);
+      c.id === "c-f-g1" ? { ...c, weight_percentage: 11.67 } : c.id === "c-f-g4" ? { ...c, weight_percentage: 1.67 } : c);
     const { state: s2, report } = saveStageRubric(s, "final", drafts);
     expect(report.versioned).toBe(2);
     expect(report.frozen).toEqual(["sess-g4-final"]);
     expect(s2.rubric.find((c) => c.id === "c-f-g1")!.is_active).toBe(false);
-    expect(s2.bundles["sess-g4-final"].criteria.find((c) => c.id === "c-f-g1")!.weight_percentage).toBe(35);
-    expect(activeRubric(s2.rubric, "final").find((c) => c.criterion_name === "System Functionality")!.weight_percentage).toBe(30);
+    expect(s2.bundles["sess-g4-final"].criteria.find((c) => c.id === "c-f-g1")!.weight_percentage).toBe(6.67);
+    expect(activeRubric(s2.rubric, "final").find((c) => c.criterion_name === "Clarity of defined requirements")!.weight_percentage).toBe(6.67);
+    expect(activeRubric(s2.rubric, "final").find((c) => c.criterion_name.startsWith("Correctness of the statement"))!.weight_percentage).toBe(11.67);
   });
 
   it("syncs unscored sessions and supports add/remove", () => {
     const s = state();
     const drafts = activeRubric(s.rubric, "proposal")
-      .filter((c) => c.id !== "c-p-g4")
-      .map((c) => (c.id === "c-p-g1" ? { ...c, weight_percentage: 25 } : c));
-    drafts.push({ id: "new-1", stage: "proposal", scope: "group", criterion_name: "Ethics & Data Privacy", description: "", weight_percentage: 20, max_score: 5, sort_order: 5 });
+      .filter((c) => c.id !== "c-p-g15")
+      .map((c) => (c.id === "c-p-g1" ? { ...c, weight_percentage: 3.34 } : c));
+    drafts.push({ id: "new-1", stage: "proposal", scope: "group", criterion_name: "Ethics & Data Privacy", description: "", weight_percentage: 9.99, max_score: 5, sort_order: 16 });
     const { state: s2, report } = saveStageRubric(s, "proposal", drafts);
     // Group 7 is unscored, so its criteria are edited in place (no needless versions)
     expect(report).toMatchObject({ added: 1, retired: 1, updated: 1, versioned: 0, synced: ["sess-g7-proposal"] });
     const names = s2.bundles["sess-g7-proposal"].criteria.map((c) => c.criterion_name);
     expect(names).toContain("Ethics & Data Privacy");
-    expect(names).not.toContain("Significance & Innovation");
+    expect(names).not.toContain("Ability to discuss/revise program modules as required by the panel members");
   });
 });
 
@@ -160,8 +161,8 @@ describe("per-stage grade blend", () => {
     const { state: s2, report } = saveStageRubric(s, "final", activeRubric(s.rubric, "final"), { groupWeight: 70, individualWeight: 30 });
     expect(report.blendChanged).toBe(true);
     expect(s2.grading.final).toEqual({ groupWeight: 70, individualWeight: 30 });
-    // Group 4 is scored → keeps 60/40, so its grades do not move
-    expect(s2.bundles["sess-g4-final"].session).toMatchObject({ group_weight: 60, individual_weight: 40 });
+    // Group 4 is scored → keeps 30/70, so its grades do not move
+    expect(s2.bundles["sess-g4-final"].session).toMatchObject({ group_weight: 30, individual_weight: 70 });
     expect(consolidate(s2.bundles["sess-g4-final"]).overallPercent).toBe(consolidate(s.bundles["sess-g4-final"]).overallPercent);
 
     const { state: s3 } = saveStageRubric(s, "proposal", activeRubric(s.rubric, "proposal"), { groupWeight: 50, individualWeight: 50 });

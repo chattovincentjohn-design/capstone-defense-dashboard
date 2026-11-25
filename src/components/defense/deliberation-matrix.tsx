@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { gradeVisibleMembers } from "@/lib/admin";
-import { consolidate } from "@/lib/grading";
+import { consolidate, transmute } from "@/lib/grading";
 import { allSubmitted, canFinalize, canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { shortHash } from "@/lib/signature";
 import { VERDICT_LABEL, type SessionBundle, type User, type Verdict } from "@/lib/types";
@@ -135,7 +135,7 @@ function Matrix({ bundle, viewer, userById, onFinalize }: Parameters<typeof Deli
           </tbody>
         </table>
         <p className="border-t px-3 py-2 text-sm font-semibold">
-          {ownOnly ? "YOUR WEIGHTED SCORE" : "CONSOLIDATED WEIGHTED SCORE"}: {c.overallRating.toFixed(2)} / {(bundle.criteria[0]?.max_score ?? 5).toFixed(1)} ({c.overallPercent.toFixed(2)}%)
+          {ownOnly ? "YOUR WEIGHTED SCORE" : "CONSOLIDATED WEIGHTED SCORE"}: {c.overallPercent.toFixed(2)}% · Grade {transmute(c.overallPercent).grade.toFixed(2)}
           <span className="font-normal text-muted-foreground"> · Suggested: {VERDICT_LABEL[c.suggestedVerdict]}</span>
         </p>
       </div>

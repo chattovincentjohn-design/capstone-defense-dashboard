@@ -1,6 +1,6 @@
 "use client";
 import { gradeVisibleMembers } from "@/lib/admin";
-import { configFor, consolidate, splitCriteria, TRANSMUTATION_TABLE } from "@/lib/grading";
+import { configFor, consolidate, RATING_SCALE, splitCriteria, TRANSMUTATION_TABLE, usesRatingScale } from "@/lib/grading";
 import { canOpenDeliberation, type Viewer } from "@/lib/permissions";
 import { STAGE_LABEL, VERDICT_LABEL, type SessionBundle, type User } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
@@ -65,7 +65,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
             <thead className="bg-neutral-100">
               <tr>
                 <th className="text-left">Proponent</th>
-                {individual.map((cr) => <th key={cr.id}>{cr.criterion_name} ({cr.weight_percentage}%)</th>)}
+                {individual.map((cr) => <th key={cr.id}>{cr.criterion_name} ({usesRatingScale(cr) ? `${cr.weight_percentage}%` : `${cr.max_score} pts`})</th>)}
                 <th>Indiv. %</th>
               </tr>
             </thead>
@@ -99,6 +99,7 @@ export function RatingSheet({ bundle, viewer, userById }: { bundle: SessionBundl
             </tbody>
           </table>
           <p className="mb-3 text-[8pt] text-neutral-600">
+            {group.some(usesRatingScale) && <>Rating scale: {RATING_SCALE.map((r) => `${r.rating} = ${r.band} (counted as ${r.percent})`).join("; ")}. </>}
             Transmutation: {TRANSMUTATION_TABLE.filter((t) => t.min > 0).map((t) => `≥${t.min}=${t.grade.toFixed(2)}`).join(", ")}, below 75=5.00.
             Final % = Group % × {cfg.groupWeight}% + Individual % × {cfg.individualWeight}%, averaged across panel members.
           </p>
