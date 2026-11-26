@@ -336,10 +336,44 @@ export async function submitRegistration(sb: SupabaseClient, code: string, input
 
 export async function listRegistrations(sb: SupabaseClient): Promise<Reg[]> {
   const { data, error } = await sb.from("group_registrations")
-    .select("id, group_label, title, academic_year, adviser_id, adviser_name, members, manuscript_url, demo_url, abstract, contact_email, status, created_at, authorized_index")
+    .select(REG_COLUMNS)
     .order("created_at", { ascending: false });
   if (error) throw error;
-  return data as Reg[];
+  return (data as unknown as Reg[]).map((r) => ({ ...r, endorsement_path: r.endorsement_path ?? "" }));
+}
+
+const REG_COLUMNS = "id, group_label, title, academic_year, adviser_id, adviser_name, members, manuscript_url, demo_url, abstract, contact_email, status, created_at, authorized_index, endorsement_path, endorsement_status, endorsement_note, endorsement_reviewed_at";
+
+/** Registrations that name this adviser (RLS: group_registrations_adviser_read). */
+export async function listMyAdviseeRegistrations(sb: SupabaseClient, userId: string): Promise<Reg[]> {
+  const { data, error } = await sb.from("group_registrations").select(REG_COLUMNS)
+    .eq("adviser_id", userId).order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as unknown as Reg[]).map((r) => ({ ...r, endorsement_path: r.endorsement_path ?? "" }));
+}
+
+const ENDORSEMENT_EXT: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
+
+/** Signed-out upload from /register: incoming/<random uuid>.<ext>. */
+export async function uploadEndorsement(sb: SupabaseClient, file: File): Promise<string> {
+  const byName = file.name.toLowerCase().split(".").pop() ?? "";
+  const ext = ENDORSEMENT_EXT[file.type] ?? (byName === "jpeg" ? "jpg" : byName);
+  const type = Object.keys(ENDORSEMENT_EXT).find((t) => ENDORSEMENT_EXT[t] === ext) ?? file.type;
+  const path = `incoming/${crypto.randomUUID()}.${ext}`;
+  const { error } = await sb.storage.from("endorsements").upload(path, file, { contentType: type, upsert: false });
+  if (error) throw new Error(`Uploading the endorsement failed: ${error.message}`);
+  return path;
+}
+
+export async function endorsementLink(sb: SupabaseClient, path: string): Promise<string> {
+  const { data, error } = await sb.storage.from("endorsements").createSignedUrl(path, 60 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function reviewEndorsement(sb: SupabaseClient, id: string, verified: boolean, note: string) {
+  const { error } = await sb.rpc("review_endorsement", { p_registration: id, p_verified: verified, p_note: note });
+  if (error) throw error;
 }
 
 export async function getRegistrationSettings(sb: SupabaseClient): Promise<import("../types").RegistrationSettings> {

@@ -5,7 +5,7 @@ import { CalendarPlus, Download, ExternalLink, FileText, Lock, Pencil, Trash2, X
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { gradesCsv, sessionHasScores, type ScheduleDraft } from "@/lib/admin";
+import { endorsementCleared, gradesCsv, sessionHasScores, type ScheduleDraft } from "@/lib/admin";
 import { useStore } from "@/lib/store";
 import { STAGE_LABEL, VERDICT_LABEL, type DefenseRequest, type GroupRegistration, type SessionBundle } from "@/lib/types";
 import { fmtDateTime, TIME_ZONE } from "@/lib/utils";
@@ -72,6 +72,9 @@ export function ScheduleManager({ prefill = null, onPrefillDone }: {
 
   const submit = (d: ScheduleDraft) => run(async () => {
     if (d.sessionId) return ops.updateSchedule(d);
+    if (prefill && d.projectId === "new" && !endorsementCleared(prefill)) {
+      throw new Error("The adviser has not verified this group's endorsement yet.");
+    }
     const msg = await ops.schedule(d);
     if (fromRequest) {
       const r = fromRequest;

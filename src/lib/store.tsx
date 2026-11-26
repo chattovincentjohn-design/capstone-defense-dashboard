@@ -8,14 +8,14 @@
  */
 import * as React from "react";
 import {
-  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, MIN_PASSWORD, defenseRequestChecklist, isAdminRole, manuscriptFileProblem, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
+  accountChangeProblem, accountDeleteProblem, accountProblems, ADVISER_ROLES, endorsementCleared, endorsementFileProblem, emailChangeProblem, assignableRoles, canManageAccount, cleanRegistration, codeMatches, deleteScheduledSession, facultySignupProblems, generateTempPassword, groupAccountHolder, MIN_PASSWORD, defenseRequestChecklist, isAdminRole, manuscriptFileProblem, groupScoringStarted, memberProblems, registrationProblems, saveStageRubric,
   scheduleSession, updateScheduledSession, type RubricSaveReport, type ScheduleDraft,
 } from "./admin";
 import { seedBundles, seedGrading, seedRubric, USERS } from "./mock-data";
 import { resolveViewer, type Viewer } from "./permissions";
 import { signEvaluation, signFinalization } from "./signature";
 import type {
-  AccessSettings, Account, AccountInput, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseRequest, DefenseRequestInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
+  AccessSettings, Account, AccountInput, EndorsementStatus, DefenseMinutes, FacultySignupInput, GroupAccountActivation, GroupSignupInput, GroupSignupMatch, DefenseRequest, DefenseRequestInput, DefenseStage, GroupRegistration, MemberInput, ProjectMember, PanelComment, RegistrationFormInfo,
   RegistrationInput, RegistrationSettings, RegistrationStatus, RubricCriterion, SessionBundle, StageBlend, User, Verdict,
 } from "./types";
 import { applyTimerAction, type TimerAction, type TimerPhase } from "./timer";
@@ -100,6 +100,14 @@ export interface StoreOps {
   saveRegistrationSettings(settings: RegistrationSettings): Promise<void>;
   setRegistrationStatus(id: string, status: RegistrationStatus): Promise<void>;
   deleteRegistration(id: string): Promise<void>;
+  /** Public registration page: upload the endorsement (PDF/JPG/PNG); returns its storage path. */
+  uploadEndorsement(file: File): Promise<string>;
+  /** A viewable link for a stored endorsement (Coordinator or the named adviser only). */
+  endorsementLink(path: string): Promise<string>;
+  /** Registrations that name the signed-in user as adviser. */
+  listMyAdviseeRegistrations(): Promise<GroupRegistration[]>;
+  /** The named adviser verifies or returns a group's endorsement. */
+  reviewEndorsement(id: string, verified: boolean, note: string): Promise<void>;
   /** Public (signed-out) faculty sign-up; signs the new account in. */
   facultySignupInfo(code: string): Promise<{ open: boolean; valid: boolean }>;
   facultySignup(code: string, input: FacultySignupInput): Promise<void>;
@@ -216,8 +224,14 @@ async function backfillSignatures(s: State): Promise<State> {
   return { ...s, bundles };
 }
 
-/** Demo: uploaded manuscripts live only in this browser tab. */
+/** Demo: uploaded manuscripts and endorsements live only in this browser tab. */
 const demoFiles = new Map<string, string>();
+
+/** Registrations saved before endorsements existed. */
+const withEndorsementDefaults = (r: GroupRegistration): GroupRegistration => ({
+  ...r, endorsement_path: r.endorsement_path ?? "", endorsement_status: r.endorsement_status ?? "none",
+  endorsement_note: r.endorsement_note ?? "", endorsement_reviewed_at: r.endorsement_reviewed_at ?? null,
+});
 
 /** Demo mirror of private.group_signup_member(): finds the caller's group or explains why not. */
 function demoGroupSignupMember(s: State, code: string, email: string, studentNumber: string) {
@@ -550,16 +564,52 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
         const s = stateRef.current;
         if (!s.registrationSettings.is_open || !s.registrationSettings.access_code) throw new Error("Group registration is closed.");
         if (!codeMatches(code, s.registrationSettings.access_code)) throw new Error("The registration code is incorrect.");
-        if (input.adviser_id && !s.accounts.some((a) => a.id === input.adviser_id && ADVISER_ROLES.includes(a.role))) throw new Error("Choose an adviser from the list.");
+        if (!input.adviser_id || !s.accounts.some((a) => a.id === input.adviser_id && a.is_active && ADVISER_ROLES.includes(a.role))) throw new Error("Choose your capstone adviser from the list. They verify your endorsement in CDEMS.");
+        if (!input.endorsement_path || !demoFiles.has(input.endorsement_path)) throw new Error("Upload a digital or scanned copy of your endorsement before submitting.");
         const problems = registrationProblems(input);
         if (problems.length) throw new Error(problems.join(" "));
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const { password, ...clean } = cleanRegistration(input); // demo keeps no passwords
-        const reg: GroupRegistration = { ...clean, id: uid("reg"), status: "pending", created_at: new Date().toISOString() };
+        const reg: GroupRegistration = {
+          ...clean, id: uid("reg"), status: "pending", created_at: new Date().toISOString(),
+          endorsement_status: "pending", endorsement_note: "", endorsement_reviewed_at: null,
+        };
         replaceAll({ ...s, registrations: [reg, ...s.registrations] });
       },
       async listRegistrations() {
-        return [...stateRef.current.registrations].sort((a, b) => b.created_at.localeCompare(a.created_at));
+        return [...stateRef.current.registrations].map(withEndorsementDefaults).sort((a, b) => b.created_at.localeCompare(a.created_at));
+      },
+      async uploadEndorsement(file) {
+        const s = stateRef.current;
+        if (!s.registrationSettings.is_open || !s.registrationSettings.access_code) throw new Error("Group registration is closed.");
+        const problem = endorsementFileProblem(file);
+        if (problem) throw new Error(problem);
+        // Demo: keep the file in this browser tab only
+        const path = `incoming/${uid("e")}-${file.name}`;
+        demoFiles.set(path, URL.createObjectURL(file));
+        return path;
+      },
+      async endorsementLink(path) {
+        const url = demoFiles.get(path);
+        if (!url) throw new Error("Demo mode keeps uploaded files only in the browser tab that uploaded them.");
+        return url;
+      },
+      async listMyAdviseeRegistrations() {
+        const s = stateRef.current;
+        return s.registrations.map(withEndorsementDefaults).filter((r) => r.adviser_id === s.currentUserId)
+          .sort((a, b) => b.created_at.localeCompare(a.created_at));
+      },
+      async reviewEndorsement(id, verified, note) {
+        const s = stateRef.current;
+        const r = s.registrations.find((x) => x.id === id);
+        if (!r) throw new Error("Registration not found.");
+        if (r.adviser_id !== s.currentUserId) throw new Error("Only the group's capstone adviser can verify this endorsement.");
+        if (!r.endorsement_path) throw new Error("This registration has no endorsement to verify.");
+        if (r.status !== "pending") throw new Error(`This registration is already ${r.status}.`);
+        if (!verified && note.trim().length < 5) throw new Error("Tell the group why the endorsement is returned.");
+        const status: EndorsementStatus = verified ? "verified" : "returned";
+        replaceAll({ ...s, registrations: s.registrations.map((x) => (x.id === id
+          ? { ...x, endorsement_status: status, endorsement_note: note.trim().slice(0, 1000), endorsement_reviewed_at: new Date().toISOString() } : x)) });
       },
       async getRegistrationSettings() {
         return stateRef.current.registrationSettings;
@@ -570,6 +620,10 @@ export function DemoStoreProvider({ children }: { children: React.ReactNode }) {
       },
       async setRegistrationStatus(id, status) {
         const s = stateRef.current;
+        const r = s.registrations.find((x) => x.id === id);
+        if (r && status === "scheduled" && r.status !== "scheduled" && !endorsementCleared(withEndorsementDefaults(r))) {
+          throw new Error("The adviser has not verified this group's endorsement yet.");
+        }
         replaceAll({ ...s, registrations: s.registrations.map((r) => (r.id === id ? { ...r, status } : r)) });
       },
       async deleteRegistration(id) {

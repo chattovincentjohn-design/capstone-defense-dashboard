@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { consolidate } from "../grading";
 import { resolveViewer } from "../permissions";
 import {
-  accountChangeProblem, accountDeleteProblem, defenseRequestChecklist, defenseRequestReady, manuscriptFileProblem, accountProblems, emailChangeProblem, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
+  accountChangeProblem, endorsementCleared, endorsementFileProblem, accountDeleteProblem, defenseRequestChecklist, defenseRequestReady, manuscriptFileProblem, accountProblems, emailChangeProblem, facultySignupProblems, cleanRegistration, codeMatches, generateRegistrationCode, membersToText, registrationProblems, assignableRoles, canManageAccount, assignmentHasScores, gradeVisibleMembers, groupScoringStarted, memberProblems, parseMembers, generateTempPassword, isRubricSyncable, sessionHasScores,
   activeRubric, blendProblems, deleteScheduledSession, fromManilaInput, gradesCsv, rubricProblems, saveStageRubric,
   scheduleSession, toManilaInput, updateScheduledSession, validateSchedule, type ScheduleDraft,
 } from "../admin";
@@ -313,7 +313,7 @@ describe("group self-registration", () => {
   const good = {
     group_label: "Group 9", title: "Barangay Health Records System", academic_year: "2026-2027",
     adviser_id: "u-reyes", adviser_name: "", manuscript_url: "https://drive.google.com/x", demo_url: "", abstract: "",
-    contact_email: "", authorized_index: 0, password: "groupsecret",
+    contact_email: "", authorized_index: 0, password: "groupsecret", endorsement_path: "incoming/x.pdf",
     members: [
       { student_name: "Ana Cruz", student_number: "2022-00811", email: "acruz@jhcsc.edu.ph" },
       { student_name: "Ben Ramos", student_number: "2022-00812", email: "bramos@jhcsc.edu.ph" },
@@ -339,8 +339,23 @@ describe("group self-registration", () => {
       .toMatch(/listed twice/);
     expect(registrationProblems({ ...good, members: [] })).toContain("Add at least one member.");
   });
-  it("accepts an unlisted adviser by name", () => {
-    expect(registrationProblems({ ...good, adviser_id: null, adviser_name: "Dr. New Adviser" })).toEqual([]);
+  it("requires a listed adviser (they verify the endorsement)", () => {
+    expect(registrationProblems({ ...good, adviser_id: null, adviser_name: "Dr. New Adviser" }).join(" ")).toMatch(/adviser from the list/);
+  });
+  it("checks the endorsement file", () => {
+    expect(endorsementFileProblem(null)).toMatch(/Upload/);
+    expect(endorsementFileProblem({ name: "endorsement.pdf", type: "application/pdf", size: 200_000 })).toBeNull();
+    expect(endorsementFileProblem({ name: "scan.JPG", type: "image/jpeg", size: 2_000_000 })).toBeNull();
+    expect(endorsementFileProblem({ name: "scan.png", type: "image/png", size: 1000 })).toBeNull();
+    expect(endorsementFileProblem({ name: "letter.docx", type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", size: 1000 })).toMatch(/PDF, JPG or PNG/);
+    expect(endorsementFileProblem({ name: "big.pdf", type: "application/pdf", size: 11 * 1024 * 1024 })).toMatch(/larger than 10 MB/);
+    expect(endorsementFileProblem({ name: "empty.pdf", type: "application/pdf", size: 0 })).toMatch(/empty/);
+  });
+  it("lets the Coordinator schedule only verified (or older) registrations", () => {
+    expect(endorsementCleared({ endorsement_status: "verified" })).toBe(true);
+    expect(endorsementCleared({ endorsement_status: "none" })).toBe(true);
+    expect(endorsementCleared({ endorsement_status: "pending" })).toBe(false);
+    expect(endorsementCleared({ endorsement_status: "returned" })).toBe(false);
   });
   it("cleans input and formats members for the schedule form", () => {
     const c = cleanRegistration({ ...good, title: "  Title  ", adviser_name: "ignored" });

@@ -1,6 +1,7 @@
 "use client";
 import { BrandLogo } from "@/components/app/brand";
 import { InstallApp } from "@/components/app/install-app";
+import { EndorsementReviews } from "@/components/app/endorsement-reviews";
 import Link from "next/link";
 import { CalendarClock, RotateCcw, Send, Settings2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -53,6 +54,8 @@ export default function Home() {
           </CardContent>
         </Card>
       )}
+
+      <EndorsementReviews />
 
       <Card>
         <CardHeader>

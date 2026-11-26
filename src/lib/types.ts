@@ -236,12 +236,21 @@ export interface RegistrationInput {
   authorized_index: number;
   /** The group account's password; sent once, stored only as a hash. */
   password: string;
+  /** Storage path of the uploaded endorsement (digital or scanned copy). */
+  endorsement_path: string;
 }
+
+/** none = registered before endorsements were required. */
+export type EndorsementStatus = "none" | "pending" | "verified" | "returned";
 
 export interface GroupRegistration extends Omit<RegistrationInput, "password"> {
   id: string;
   status: RegistrationStatus;
   created_at: string;
+  endorsement_status: EndorsementStatus;
+  /** The adviser's reason when returned (or an optional remark when verified). */
+  endorsement_note: string;
+  endorsement_reviewed_at: string | null;
 }
 
 export interface RegistrationSettings {

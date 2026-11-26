@@ -9,7 +9,7 @@ import { consolidate, DEFAULT_GRADING_CONFIG } from "./grading";
 import type { State } from "./store";
 import type {
   Account, AccountInput, CapstoneProject, MemberInput, DefenseMinutes, DefenseStage, PanelAssignment, ProjectMember, RubricCriterion,
-  DefenseRequestInput, FacultySignupInput, RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
+  DefenseRequestInput, FacultySignupInput, GroupRegistration, RegistrationInput, RubricScope, SessionBundle, StageBlend, User,
 } from "./types";
 import { STAGE_LABEL, VERDICT_LABEL } from "./types";
 import { uid } from "./utils";
@@ -565,7 +565,7 @@ export function registrationProblems(r: RegistrationInput): string[] {
   const ay = r.academic_year.trim();
   if (!ACADEMIC_YEAR_RE.test(ay)) p.push("Academic year must look like 2026-2027.");
   else if (Number(ay.slice(5)) !== Number(ay.slice(0, 4)) + 1) p.push("Academic year must be two consecutive years, e.g. 2026-2027.");
-  if (!r.adviser_id && !r.adviser_name.trim()) p.push("Choose your adviser, or type their name if they are not listed.");
+  if (!r.adviser_id) p.push("Choose your capstone adviser from the list. They verify your endorsement in CDEMS.");
   if (r.authorized_index < 0 || r.authorized_index >= r.members.length) p.push("Choose which member will sign in for the group.");
   if (r.password.length < 8) p.push("The group account password must be at least 8 characters.");
   else if (r.password.length > 72) p.push("The group account password must be at most 72 characters.");
@@ -597,14 +597,32 @@ export const membersToText = (members: MemberInput[]) =>
 export function cleanRegistration(r: RegistrationInput): RegistrationInput {
   return {
     group_label: r.group_label.trim(), title: r.title.trim(), academic_year: r.academic_year.trim(),
-    adviser_id: r.adviser_id || null, adviser_name: r.adviser_id ? "" : r.adviser_name.trim(),
+    adviser_id: r.adviser_id || null, adviser_name: "",
     members: r.members.map((m) => ({ student_name: m.student_name.trim(), student_number: m.student_number.trim(), email: m.email.trim().toLowerCase() })),
     manuscript_url: r.manuscript_url.trim(), demo_url: r.demo_url.trim(), abstract: r.abstract.trim(),
     contact_email: (r.members[r.authorized_index]?.email ?? r.contact_email).trim().toLowerCase(),
     authorized_index: r.authorized_index,
     password: r.password,
+    endorsement_path: r.endorsement_path,
   };
 }
+
+/** Endorsement letter: a digital or scanned copy (PDF, JPG or PNG). */
+export const MAX_ENDORSEMENT_MB = 10;
+export const ENDORSEMENT_TYPES: Record<string, string> = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
+
+export function endorsementFileProblem(file: { name: string; type: string; size: number } | null | undefined): string | null {
+  if (!file) return "Upload a digital or scanned copy of your endorsement (PDF, JPG or PNG).";
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  if (!ENDORSEMENT_TYPES[file.type] && !["pdf", "jpg", "jpeg", "png"].includes(ext)) return "The endorsement must be a PDF, JPG or PNG file.";
+  if (file.size === 0) return "The endorsement file is empty.";
+  if (file.size > MAX_ENDORSEMENT_MB * 1024 * 1024) return `The endorsement is larger than ${MAX_ENDORSEMENT_MB} MB. Scan at a lower resolution or compress it.`;
+  return null;
+}
+
+/** Whether the Coordinator may schedule a registration (its adviser has verified the endorsement). */
+export const endorsementCleared = (r: Pick<GroupRegistration, "endorsement_status">) =>
+  r.endorsement_status === "verified" || r.endorsement_status === "none";
 
 // ---------------------------------------------------------------------------
 // Faculty self sign-up

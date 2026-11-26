@@ -7,6 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useStore } from "@/lib/store";
 import { AccessCodeCard } from "./access-code-card";
+import { EndorsementBadge, OpenEndorsementButton } from "@/components/app/endorsement-badge";
+import { endorsementCleared } from "@/lib/admin";
 import type { GroupRegistration, RegistrationStatus } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 
@@ -88,7 +90,10 @@ export function RegistrationsManager({ onSchedule }: { onSchedule: (r: GroupRegi
                 A.Y. {r.academic_year} · Submitted {fmtDateTime(r.created_at)}
               </p>
             </div>
-            <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+            <div className="flex flex-wrap gap-1.5">
+              {r.status === "pending" && <EndorsementBadge status={r.endorsement_status} />}
+              <Badge variant={STATUS_VARIANT[r.status]}>{STATUS_LABEL[r.status]}</Badge>
+            </div>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <p>
@@ -102,6 +107,14 @@ export function RegistrationsManager({ onSchedule }: { onSchedule: (r: GroupRegi
                 ? <>{r.adviser_name} <Badge variant="warning" className="ml-1">No CDEMS account yet</Badge></>
                 : "—")}
             </p>
+            {r.endorsement_status !== "none" && (
+              <div className="flex flex-wrap items-center gap-2 rounded-md border bg-background/40 p-2 text-xs">
+                <OpenEndorsementButton reg={r} />
+                {r.endorsement_status === "pending" && <span className="text-muted-foreground">The adviser verifies it from their CDEMS dashboard. You can schedule once it is verified.</span>}
+                {r.endorsement_status === "verified" && <span className="text-success">Verified{r.endorsement_reviewed_at ? ` ${fmtDateTime(r.endorsement_reviewed_at)}` : ""}{r.endorsement_note ? ` · "${r.endorsement_note}"` : ""}</span>}
+                {r.endorsement_status === "returned" && <span className="text-destructive">Returned: {r.endorsement_note}. The group must register again with a corrected endorsement.</span>}
+              </div>
+            )}
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-xs">
                 <thead className="text-muted-foreground">
@@ -127,7 +140,8 @@ export function RegistrationsManager({ onSchedule }: { onSchedule: (r: GroupRegi
             <div className="flex flex-wrap items-center gap-2 pt-1">
               {r.status === "pending" && (
                 <>
-                  <Button size="sm" onClick={() => onSchedule(r)}><CalendarPlus /> Schedule defense</Button>
+                  <Button size="sm" disabled={!endorsementCleared(r)} onClick={() => onSchedule(r)}
+                    title={endorsementCleared(r) ? undefined : "Waiting for the adviser to verify the endorsement"}><CalendarPlus /> Schedule defense</Button>
                   <Button size="sm" variant="outline" disabled={busy}
                     onClick={() => void act(() => ops.setRegistrationStatus(r.id, "rejected"), `${r.group_label}'s registration was rejected.`)}><X /> Reject</Button>
                 </>

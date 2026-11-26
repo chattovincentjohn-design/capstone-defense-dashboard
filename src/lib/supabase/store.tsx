@@ -7,7 +7,7 @@
  */
 import * as React from "react";
 import {
-  activeRubric, blendFor, buildAttendance, cleanRegistration, facultySignupProblems, manuscriptFileProblem, groupScoringStarted, registrationProblems, isRubricSyncable, memberProblems, saveStageRubric,
+  activeRubric, blendFor, buildAttendance, cleanRegistration, endorsementFileProblem, facultySignupProblems, manuscriptFileProblem, groupScoringStarted, registrationProblems, isRubricSyncable, memberProblems, saveStageRubric,
   sessionHasScores, validateSchedule,
   type ScheduleDraft,
 } from "../admin";
@@ -338,6 +338,14 @@ export function SupabaseStoreProvider({ children }: { children: React.ReactNode 
     },
     setRegistrationStatus: (id, status) => repo.setRegistrationStatus(sb, id, status),
     deleteRegistration: (id) => repo.deleteRegistration(sb, id),
+    async uploadEndorsement(file) {
+      const problem = endorsementFileProblem(file);
+      if (problem) throw new Error(problem);
+      return repo.uploadEndorsement(sb, file);
+    },
+    endorsementLink: (path) => repo.endorsementLink(sb, path),
+    listMyAdviseeRegistrations: () => repo.listMyAdviseeRegistrations(sb, stateRef.current.currentUserId),
+    reviewEndorsement: (id, verified, note) => repo.reviewEndorsement(sb, id, verified, note),
     facultySignupInfo: (code) => repo.facultySignupInfo(sb, code),
     async facultySignup(code, input) {
       const problems = facultySignupProblems(input, input.password);
